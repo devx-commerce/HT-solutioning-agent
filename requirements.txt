@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+requests
+google-cloud-bigquery
+google-cloud-secret-manager
+google-cloud-aiplatform[agent_engines]
+google-auth
+google-auth-oauthlib
+google-api-python-client
+google-adk
