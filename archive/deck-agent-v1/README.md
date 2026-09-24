@@ -22,6 +22,16 @@ That boundary is the most important decision in here. The deck agent does no
 research. If the brief is thin, it says so and stops — it does not invent
 evidence to fill a slide.
 
+**This orchestrator/subagent split is itself superseded**, separately from
+the rendering-engine supersession above: the live design keeps one agent
+(the existing `solutioning_agent`) doing classification, research, and
+drafting via a single tool-calling loop rather than a separate research
+orchestrator handing off to a deck subagent. The "no research, don't invent
+evidence" *discipline* still holds — see
+[`docs/research-and-rendering-decisions.md`](../../docs/research-and-rendering-decisions.md)
+for the current architecture and the loose (non-`DeckBrief`) research output
+shape.
+
 ## Read in this order
 
 **Archived (superseded, see above) — original build-from-scratch plan:**

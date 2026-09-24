@@ -2,6 +2,13 @@
 -- Run once via bq query, with --parameter substitution or a sed pass for
 -- PROJECT/DATASET — see README.md for the exact command.
 
+-- deck_json and research_brief are the system-of-record columns for the
+-- presentation-md rendering pipeline and the research step (see
+-- docs/research-and-rendering-decisions.md). Both are JSON stored as STRING
+-- rather than BigQuery JSON type, matching the loose/free-form shape decided
+-- for research_brief and the presentation-md deck.schema.json shape for
+-- deck_json. Both nullable — not every existing row will have them, and a
+-- brief that hasn't been drafted/researched yet legitimately has neither.
 CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.briefs` (
   brief_id STRING NOT NULL,
   message_id STRING,
@@ -11,6 +18,8 @@ CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.briefs` (
   detail STRING,
   deck_file_id STRING,
   deck_link STRING,
+  deck_json STRING,
+  research_brief STRING,
   created_at TIMESTAMP,
   updated_at TIMESTAMP
 );

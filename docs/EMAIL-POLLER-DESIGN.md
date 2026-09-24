@@ -59,15 +59,52 @@ Two separate checks, at two different granularities:
   reprocessed every 30 minutes — not a label, not read-state.
 - **Thread-level** (`ingestion_threads` table, keyed by `thread_id`,
   intake-owned — separate from whatever the agent's own tools record about
-  a built deck): has *this thread* already produced a brief? If yes, a new
-  Branch A message on it doesn't retrigger classification or a duplicate
-  Sheet row — it's logged as thread activity and left there. Auto-feeding a
-  new reply into deck refinement is a real feature, not a default to guess
-  at now.
-- **Branch B is message-scoped, not thread-scoped**, deliberately: a human
-  pointing at one specific message is a more specific instruction than
-  "does this thread already have anything," so it can still act even if the
-  thread already has an existing brief from Branch A.
+  a built deck): has *this thread* already produced a brief, or is one
+  building right now? Implemented in `ingestion._thread_lock_reason` — see
+  "Thread locking" below for the exact rule table.
+
+## Thread locking — the exact rules
+
+`_thread_lock_reason(existing_thread, triggered_by)` is the single source
+of truth; both branches call it the same way, no branch-specific
+shortcuts. Rules, by the existing thread's status:
+
+| Status | Branch A (automatic) | Branch B (manual label) |
+|---|---|---|
+| none yet | proceed | proceed |
+| `building` | **blocked** — never interrupt a build in flight, either branch, to avoid racing two builds for one thread | **blocked** — same reason |
+| `built` | **blocked** — a later reply in an already-succeeded thread must not silently trigger an unrequested second deck | **allowed** — a human explicitly re-labeling the thread is a deliberate override; that is the entire point of the manual label existing |
+| `failed` | **allowed** — one failed attempt on one message is not grounds to permanently ignore every later message in the thread; a genuine new request gets a real new attempt | **allowed** — explicit override always wins |
+
+**Why `built` splits by branch, but `failed` doesn't:** an automatic
+detection (branch A) re-triggering itself on every later reply in a
+succeeded thread would spam duplicate decks with no human asking for
+them — that's genuinely unwanted. But `failed` isn't a semantically
+different final state the way `built` is; it just means the last attempt
+didn't finish. There's no equivalent risk in retrying it automatically,
+so both branches get to.
+
+**Classification and the build prompt both use the whole thread**
+(`mail_utils.fetch_thread_context`, all messages so far, oldest first),
+not just whichever single message tripped the filter — the substance
+(budget, timeline, a scope change) often lands in a reply, not the
+message that happened to arrive first.
+
+**Re-opening a thread doesn't create a second row.** `storage.open_thread`
+is a MERGE: a first-time thread gets inserted, a re-open (manual override
+on `built`, or a retry on `failed`) resets the *existing* row back to
+`building` in place. This also means `/work`'s own duplicate-delivery
+guard (skip if status is already `built`/`failed`) keeps working
+unchanged — a genuine new trigger always flips status to `building`
+*before* the Pub/Sub message is published, so only a truly stale,
+already-consumed redelivery still observes `built`/`failed` there.
+
+Tests for this exact table: `tests/test_ingestion.py`.
+
+**Branch B is message-scoped for its own idempotency, not thread-scoped**:
+a human labeling one specific message is a more specific instruction than
+"does this thread already have anything," which is exactly why it's
+allowed to override the thread lock in the first place.
 
 ## Labels — two, opposite directions
 
@@ -87,9 +124,10 @@ re-consent once this scope is added — a one-time cost, not an ongoing one.
 ## The sheet
 
 Doesn't exist yet. Created once, by hand — same pattern as the Slides
-template (`TEMPLATE_FILE_ID`): one human-made artifact, referenced by id
-(`BRIEFS_SHEET_ID`), not generated from code. The agent only ever appends
-rows to a sheet that already exists.
+template used to be (`TEMPLATE_FILE_ID`, now obsolete — see
+[`docs/research-and-rendering-decisions.md`](research-and-rendering-decisions.md#7-deck-rendering-presentation-md-deck-json-as-system-of-record)):
+one human-made artifact, referenced by id (`BRIEFS_SHEET_ID`), not generated
+from code. The agent only ever appends rows to a sheet that already exists.
 
 One row per thread, written exactly once, **never edited again** — no
 column on an existing row is ever revisited, whatever a later email in the
@@ -180,11 +218,16 @@ sheet row written), either let a real Pub/Sub subscription deliver to
 iterating.
 
 - **`force=true`** — ignore the watermark (use the bootstrap cutoff instead)
-  and ignore prior decisions, so every candidate gets reprocessed as if
-  this were the first sweep ever. Never advances the real watermark — a
-  test run must not affect the next genuine one. Expect duplicate rows if
-  run against a mailbox already swept normally; that's the tradeoff for a
-  cheap replay, not an oversight.
+  and ignore prior *message-level* decisions, so every candidate gets
+  reclassified as if seen for the first time. Never advances the real
+  watermark — a test run must not affect the next genuine one.
+  **`force` does NOT bypass the thread lock.** It lets you re-run
+  classification cheaply and repeatedly, but the thread-lock rules above
+  still gate every real side effect (label, email, Sheet row) exactly the
+  same as a normal sweep. Re-testing a thread that's `built`/`failed`
+  requires going through the same rules a real trigger would — a manual
+  `generate-deck` label for `built`, or just letting a `failed` thread
+  retry naturally.
 - **`dry_run=true`** — carried through in the published payload; `/work`
   skips the actual Agent Engine call and treats it as a deterministic
   success instead of the (currently fragile) text-matching check against
@@ -196,8 +239,27 @@ iterating.
   out of free text; this sidesteps needing that fix yet, deliberately,
   while the project is being built component by component.
 
+**Automated tests**, added 2026-09-25 after the incident above — narrow by
+design, pinning down the thread-lock rule table and full-thread-context
+behavior specifically, not a general test suite for the pipeline:
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/
+```
+
+Everything in `tests/` mocks Gmail, BigQuery, Pub/Sub, and the classifier —
+these check control flow (does branch B correctly override a `built`
+thread; does branch A correctly get blocked by one), not real API
+behavior. `/sweep?dry_run=true` against a real mailbox is still the way to
+verify actual API integration.
+
 ## Not built here
 
-Reply-triggered refinement (a Branch A message on an already-brief'd thread
-automatically updating the deck), a Category taxonomy, an AM/GH lookup
-table. All deliberately deferred rather than guessed at.
+**Automatic** reply-triggered refinement — a Branch A message on an
+already-`built` thread silently updating the deck with no human asking —
+stays deliberately out. What *is* built (2026-09-25): a human can
+explicitly ask for it via the manual `generate-deck` label, which
+overrides the thread lock on purpose; automatic detection still can't. A
+Category taxonomy and an AM/GH lookup table are also deliberately deferred
+rather than guessed at.

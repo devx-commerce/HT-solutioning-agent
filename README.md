@@ -15,27 +15,10 @@ devxlabs.ai` only needs project IAM, not an OAuth grant.
 
 ## 0 — Access, before anything else
 
-This section was written early, when most of the IAM gaps below were still
-open. As of 2026-09-23 the project-level and resource-level `setIamPolicy`
-gaps that blocked steps 10/onboarding-service/BigQuery have all been
-resolved — check current state with `testIamPermissions` rather than
-trusting this list, since it's a point-in-time record, not a live status.
-Full chronological history of every gap found and how it was resolved is in
-[`docs/logs/`](docs/logs/) (dated deployment logs) — that's the source of
-truth for "was X actually granted," not this section.
-
-Historical context, still useful if a similar gap resurfaces:
-
 - **Org policy** isn't a blocker — `navya.agarwal@devxlabs.ai` already holds
   `roles/editor` on the project, granted by HT.
 - **`roles/editor` never includes any `*.setIamPolicy`-shaped permission**,
-  across every GCP service — this was the recurring pattern. Each one
-  (`run.services.setIamPolicy`, `secretmanager.secrets.setIamPolicy`,
-  `aiplatform.reasoningEngines.setIamPolicy`,
-  `discoveryengine.agents.setIamPolicy`, `resourcemanager.projects.setIamPolicy`,
-  `bigquery.jobs.create` for the *reasoning-engine's own* service account)
-  had to be discovered independently by hitting the actual error, not
-  predicted from the role name. Test the specific permission string you need
+  across every GCP service. Test the specific permission string you need
   directly rather than assuming a broad role covers it:
   ```bash
   curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" \
@@ -43,6 +26,9 @@ Historical context, still useful if a similar gap resurfaces:
     "https://cloudresourcemanager.googleapis.com/v1/projects/academic-diode-477405-m3:testIamPermissions" \
     -d '{"permissions":["the.permission.you.need"]}'
   ```
+
+Point-in-time record — see [`docs/logs/`](docs/logs/) for the dated ground
+truth on what's actually granted.
 
 ## 1 — APIs
 
@@ -156,6 +142,12 @@ Six tables: `briefs`, `decisions`, `users`, `sweep_state` (the watermark),
 
 ## 5 — Drive template, and the solutioning briefs sheet
 
+> **Obsolete, pending rewrite:** the client has confirmed no Slides template
+> exists. `TEMPLATE_FILE_ID` and `build_solution_deck`'s copy-and-replace flow
+> are being replaced by a presentation-md Deck JSON → Slides upload pipeline —
+> see [`docs/research-and-rendering-decisions.md`](docs/research-and-rendering-decisions.md#7-deck-rendering-presentation-md-deck-json-as-system-of-record).
+> Steps below still describe the current (soon to change) code.
+
 Create one Slides file with `{{CLIENT_NAME}}` and `{{NOTES}}` placeholders,
 owned by whoever ran step 3. Copy its file id into `TEMPLATE_FILE_ID`.
 
@@ -168,10 +160,8 @@ creates or formats the sheet itself.
 
 ## 6 — Cloud Run
 
-**This is actually two services from one source tree, not one** — this
-section originally described a single `solutioning-agent` service; the real
-deployed architecture (as of 2026-09-21) splits it in two, gated by a
-`PUBLIC_ROUTES_ONLY` env var checked in `app/main.py`:
+Two Cloud Run services from one source tree, gated by a `PUBLIC_ROUTES_ONLY`
+env var checked in `app/main.py`:
 
 - **`solutioning-agent`** (private, `--no-allow-unauthenticated`) — the
   operational service: `/status`, `/sweep`, `/work`, `/handle_message`.
@@ -478,14 +468,8 @@ Full plan: [`docs/deck-agent-plan.md`](docs/deck-agent-plan.md)
 — confirmed bugs found in the fork so far, the fix list, what to keep/cut
 from its packages, and the testing plan.
 
-The original build-from-scratch design (deck IR, deterministic layout
-engine, rectangles-only charts, a VLM QA loop, a 5-week MVP) is archived in
-[`archive/deck-agent-v1/`](archive/deck-agent-v1/) — superseded for
-*how the deck gets rendered*, but two pieces of it are still real and worth
-reading: **[archive/deck-agent-v1/10-risks.md](archive/deck-agent-v1/10-risks.md) §1**
-predicted the exact `drive.file` scope bug that was found and fixed live on
-2026-09-23 (see step 2's scope notes above), and
-**[archive/deck-agent-v1/08-lifecycle.md](archive/deck-agent-v1/08-lifecycle.md)**'s
-locking/ownership model (`sales.agent@` owns the file, the human gets
-`commenter`, no mid-flight co-editing) applies regardless of what renders
-the deck.
+The original build-from-scratch design is archived in
+[`archive/deck-agent-v1/`](archive/deck-agent-v1/) — superseded for how the
+deck gets rendered, but its README notes two pieces still worth reading
+(the scope-bug prediction in `10-risks.md` §1, and the locking/ownership
+model in `08-lifecycle.md`).
