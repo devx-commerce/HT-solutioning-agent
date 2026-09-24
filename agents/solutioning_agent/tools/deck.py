@@ -227,6 +227,8 @@ def update_deck(brief_id: str, edits_json: str) -> dict:
     slides = deck.get("slides") or []
     applied = []
     for edit in edits:
+        if not isinstance(edit, dict):
+            return {"error": f'Each edit must be an object, got: {edit!r}'}
         index, field = edit.get("slide_index"), edit.get("field")
         if not isinstance(index, int) or not 0 <= index < len(slides):
             return {"error": f"slide_index {index} is outside this deck's {len(slides)} slides."}
