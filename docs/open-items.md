@@ -27,6 +27,22 @@ being acted on right now.
 
 ## Open questions (need an answer, not yet answered)
 
+- **How should the past-decks Drive data store be scoped, and which identity
+  does the agent search as?** Blocks `search_past_decks`. What's established:
+  a Drive data store is `{contentConfig: "GOOGLE_WORKSPACE", aclEnabled: true,
+  workspaceConfig: {type: "GOOGLE_DRIVE"}}`, and two already exist in this
+  project (HT's own — not ours, don't touch), so Workspace consent has been
+  granted here before. Unresolved:
+  1. Can a Drive connector be scoped to one folder ("Past Solution Decks"),
+     or does it index the whole domain/Drive? If it's whole-Drive, searches
+     need a filter so results are past decks and not arbitrary HT documents —
+     and indexing HT's entire corporate Drive is a decision for HT, not us.
+  2. With `aclEnabled`, search is ACL-filtered per end user. For the email
+     pipeline there is no interactive user — presumably it should search as
+     the account manager whose mailbox triggered the brief. Needs deciding.
+  Not attempted autonomously: creating this touches how much of HT's Drive
+  gets indexed, which is theirs to approve.
+
 - **Does Gemini Enterprise's chat surface forward an uploaded file's bytes
   (or a storage reference) to the agent in a form a tool function can
   access?** Not confirmed by anything in this repo or the SOW — no
@@ -40,15 +56,41 @@ being acted on right now.
 
 ## Housekeeping
 
-- **Label every resource that's ours with `solutioning-agent`.** This runs in
-  HT Media's own GCP project (`academic-diode-477405-m3`), which already
-  contains unrelated internal HT work — Discovery Engine data stores
-  (`drive_*`, `drive-done_*`, `sfdc-new-test_*_opportunity`, two
-  `*-gcs-connector_*` stores), and possibly more. Nothing of theirs may be
-  modified. Needs: a full inventory (Cloud Run services, secrets, BigQuery
-  dataset, Pub/Sub topics/subscriptions, service accounts, scheduler jobs,
-  any data stores we create), then a label applied to each one that is
-  verifiably ours. When in doubt about ownership, leave it alone.
+- **Label every resource that's ours with `app=solutioning-agent`.** This runs
+  in HT Media's own GCP project (`academic-diode-477405-m3`) alongside
+  unrelated internal HT work. Inventory taken 2026-09-25:
+
+  **Ours** (safe to label):
+  - Cloud Run: `solutioning-agent`, `solutioning-agent-onboarding`
+  - Secrets: `solutioning-agent-oauth`, `solutioning-agent-oauth-client`,
+    and the per-mailbox `gmail-<sha256[:16]>` secrets our own onboarding
+    creates (`app/auth/gmail_oauth.py:139`)
+  - Pub/Sub: `solutioning-agent-build-work`, `-dead`, `-sub`
+  - Cloud Scheduler: `solutioning-agent-sweep`
+  - BigQuery dataset: `solutioning_agent`
+  - Agent Engine `reasoningEngines`: the four named "Solutioning Agent"
+    (2026-09-21/22)
+
+  **HT's — do not touch, do not label, do not query:**
+  - Cloud Run: `gfpgan-service`, `ht-media-mediclaim-enrollment`,
+    `orgchart-pro`
+  - Secret: `password`
+  - BigQuery dataset: `contracts` (may be intended for the Contract
+    Intelligence Agent, but we did not create it — treat as theirs)
+  - All five existing Discovery Engine data stores (`drive_*`,
+    `drive-done_*`, `sfdc-new-test_*_opportunity`, two `*-gcs-connector_*`)
+  - Agent Engine `reasoningEngines` named `Agent_Editor*` (Feb 2026)
+
+  **Caveat before labelling Cloud Run:** setting labels on a Cloud Run
+  service creates a new revision, i.e. a redeploy. Don't do that
+  immediately before a demo — label the zero-risk resources (secrets,
+  dataset, Pub/Sub, scheduler) first and do Cloud Run in a quiet window.
+
+- **Four duplicate "Solutioning Agent" Agent Engine resources exist** from
+  repeated `adk deploy agent_engine` runs, which create a new resource each
+  time rather than updating in place. Only one is wired to GE. Worth pruning
+  the stale ones eventually — carefully, since deleting the live one breaks
+  the GE registration.
 
 ## Ideas not yet designed
 
