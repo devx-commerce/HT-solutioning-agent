@@ -1,15 +1,16 @@
-# Deck generator — design docs
+# Archived — deck generator v1 design docs (superseded)
 
-**Live plan: [11-presentation-md-fork.md](11-presentation-md-fork.md).**
-Docs 01–10 below (now in [`archive/`](archive/)) laid out building a deck
-compiler from scratch on the raw Slides API — real research, but superseded
-once doc 11 decided to fork and patch `presentation-md` instead, since it
-already clears the design-quality bar (real editable text/tables, a native
-OOXML chart object, a working theme system). That fork is developed entirely
-as its own separate project at `~/Desktop/codebase/presentation-md/` — not
-inside this repo. Docs 01–10 stay archived rather than deleted: the Slides
-API constraints and risk analysis in them are still real and worth having if
-the presentation-md path ever doesn't pan out.
+**This is an archive. The live plan is [`docs/deck-agent-plan.md`](../../docs/deck-agent-plan.md).**
+
+The 10 docs here laid out building a deck compiler from scratch on the raw
+Slides API — real research, but superseded 2026-09-23 by the decision to
+fork and patch `presentation-md` instead, since it already clears the
+design-quality bar (real editable text/tables, a native OOXML chart object,
+a working theme system). That fork is developed entirely as its own
+separate project at `~/Desktop/codebase/presentation-md/` — not inside this
+repo. Kept archived rather than deleted: the Slides API constraints and
+risk analysis in them are still real and worth having if the
+presentation-md path ever doesn't pan out.
 
 The slide-deck generator is a **subagent**. Something bigger sits in front of
 it: retrieval from BigQuery and past decks, web research, Gmail context,
@@ -27,18 +28,18 @@ evidence to fill a slide.
 
 | | | |
 |---|---|---|
-| [01](archive/01-decisions.md) | **Decisions** | Build vs. integrate, and why nothing off-the-shelf works |
-| [02](archive/02-constraints.md) | **Constraints** | The seven Slides API facts that dictate the architecture |
-| [03](archive/03-architecture.md) | **Architecture** | Subagent contract, pipeline, deck IR, ADK wiring |
-| [04](archive/04-design-system.md) | **Design system** | Template deck, archetypes, tokens, what stays creative |
-| [05](archive/05-charts.md) | **Charts** | Rectangles-only renderer |
-| [06](archive/06-images.md) | **Images** | Generation, style consistency, contrast guard |
-| [07](archive/07-quality.md) | **Quality** | Tier A geometry, terminal VLM loop |
-| [08](archive/08-lifecycle.md) | **Lifecycle** | Locking, states, conservative refinement — this philosophy (deck locked while the agent owns it, conservative refinement) still applies regardless of what renders the deck, worth keeping in mind even though the compiler itself is superseded |
-| [09](archive/09-mvp.md) | **MVP** | Scope, build order, timeline, cuts — superseded by doc 11's own scope/testing plan |
-| [10](archive/10-risks.md) | **Risks** | What to verify before building on it — §1 (`drive.file` may not be able to copy the template) turned out to be real, confirmed live 2026-09-23 |
+| [01](01-decisions.md) | **Decisions** | Build vs. integrate, and why nothing off-the-shelf works |
+| [02](02-constraints.md) | **Constraints** | The seven Slides API facts that dictate the architecture |
+| [03](03-architecture.md) | **Architecture** | Subagent contract, pipeline, deck IR, ADK wiring |
+| [04](04-design-system.md) | **Design system** | Template deck, archetypes, tokens, what stays creative |
+| [05](05-charts.md) | **Charts** | Rectangles-only renderer |
+| [06](06-images.md) | **Images** | Generation, style consistency, contrast guard |
+| [07](07-quality.md) | **Quality** | Tier A geometry, terminal VLM loop |
+| [08](08-lifecycle.md) | **Lifecycle** | Locking, states, conservative refinement — this philosophy (deck locked while the agent owns it, conservative refinement) still applies regardless of what renders the deck, worth keeping in mind even though the compiler itself is superseded |
+| [09](09-mvp.md) | **MVP** | Scope, build order, timeline, cuts — superseded by docs/deck-agent-plan.md's own scope/testing plan |
+| [10](10-risks.md) | **Risks** | What to verify before building on it — §1 (`drive.file` may not be able to copy the template) turned out to be real, confirmed live 2026-09-23 |
 
-## The decisions, in one page (archived — see doc 11 for what's actually being built)
+## The decisions, in one page (archived — see docs/deck-agent-plan.md for what's actually being built)
 
 **Build it, on Google's open stack.** Gemini-in-Slides already does this well
 and has no API. Everything else Google ships is substrate, not capability.

@@ -17,7 +17,7 @@ import os
 
 from googleapiclient.discovery import build
 
-from oauth_creds import get_credentials
+from ..auth.oauth_creds import get_credentials
 
 SERVICE_NAME = "Solutioning Agent"
 

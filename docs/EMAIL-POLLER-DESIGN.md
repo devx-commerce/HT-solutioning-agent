@@ -1,8 +1,8 @@
 # Email poller — ingestion design
 
 Decisions only, consolidated out of chat. Implementation lives in
-`ingestion.py`, `classify.py`, `sheet.py`, `labels.py`, `storage.py`,
-`agent_client.py`. This doc is what to update if a decision here turns out
+`app/pipeline/ingestion.py`, `app/pipeline/classify.py`, `app/pipeline/sheet.py`, `app/pipeline/labels.py`, `app/pipeline/storage.py`,
+`app/pipeline/agent_client.py`. This doc is what to update if a decision here turns out
 wrong — not a description of the code, the reasoning behind it.
 
 ## Polling
@@ -104,7 +104,7 @@ Column-by-column:
 | Client | Yes | Extracted from email content |
 | Brief | Yes | Summarized from email content |
 | Touchpoints | Only if unambiguous | Extracted against a fixed enum (Print / Digital / Integrated / Events); blank otherwise |
-| Category | **Open, tentative** | Implemented the same as Touchpoints (fill only if unambiguous) as a defensible default — not confirmed. Easy one-line change to always-blank if that's wrong; see `classify.py`. |
+| Category | **Open, tentative** | Implemented the same as Touchpoints (fill only if unambiguous) as a defensible default — not confirmed. Easy one-line change to always-blank if that's wrong; see `app/pipeline/classify.py`. |
 | Month | Yes, but never LLM-derived | The month the *triggering email* arrived, read straight off its timestamp (`April'26` style) — not extracted, not inferred, not the AM's stated target flight date |
 | AM/CH | **Never** | No reliable signal — mailbox arrival doesn't mean deal ownership, even across N onboarded mailboxes. A forward, a CC, a shared inbox all break the mapping. Human-filled only |
 | GH | **Never** | Same reasoning as AM/CH |

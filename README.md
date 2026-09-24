@@ -4,7 +4,7 @@ Built component by component, against real infra from day one — every
 permission and entitlement failure happens now, against the actual project,
 not mid-timeline. The inbox poller, classification, and the solutioning briefs
 sheet are real and running; deck generation is still a placeholder while
-`docs/deck-agent/` gets built out as its own piece.
+`docs/deck-agent-plan.md` gets built out as its own piece (superseded original design in `archive/deck-agent-v1/`).
 
 Runs in **HT's GCP project** (`academic-diode-477405-m3`, confirmed inside
 an organization — id `387062944839`, HT's own Cloud Identity). Auth is
@@ -83,17 +83,17 @@ In HT's project, APIs & Services → OAuth consent screen:
   External+Testing's downsides: no test-user list to maintain, no 7-day
   refresh-token expiry, no unverified-app warning screen.
 - Scopes across both clients (current as of 2026-09-23 — this list has
-  drifted before, cross-check against `gmail_oauth.py`'s `GMAIL_SCOPES` and
-  `oauth_creds.py`'s `SCOPES` if it looks stale again):
-  - **Web application client** (per-user, `gmail_oauth.py`): `openid`,
+  drifted before, cross-check against `app/auth/gmail_oauth.py`'s `GMAIL_SCOPES` and
+  `app/auth/oauth_creds.py`'s `SCOPES` if it looks stale again):
+  - **Web application client** (per-user, `app/auth/gmail_oauth.py`): `openid`,
     `email`, `profile`, `gmail.readonly`, `gmail.labels`.
-  - **Desktop client** (shared identity, `oauth_creds.py`): `drive` (not
+  - **Desktop client** (shared identity, `app/auth/oauth_creds.py`): `drive` (not
     `drive.file` — that scope only sees files the app itself created,
     which 404s trying to copy a manually-created template; confirmed live
     2026-09-23), `presentations`, `gmail.send`, `spreadsheets`,
     `gmail.readonly`, `gmail.labels` (the last two are deliberately also on
     the shared identity today, not just the per-mailbox one — see
-    `oauth_creds.py`'s module docstring for why).
+    `app/auth/oauth_creds.py`'s module docstring for why).
   - Both `gmail.readonly`/`gmail.labels` and `drive` are sensitive/restricted
     scopes: requesting them in code is not enough — they must also be
     explicitly added under **Google Auth Platform → Data access** in the
@@ -348,7 +348,7 @@ path). Forgetting the second one means GE keeps calling the old, stale
 deployment and you'll be debugging an error that's already fixed.
 
 **Secret rotation doesn't take effect on a warm, already-running instance.**
-`oauth_creds.py`'s `_token_material()` is `@lru_cache`d — it reads Secret
+`app/auth/oauth_creds.py`'s `_token_material()` is `@lru_cache`d — it reads Secret
 Manager's `latest` version once per process and never again. Rotating a
 secret (e.g. re-minting a refresh token) has no effect on an Agent Engine
 instance that was already warm before the rotation; only a fresh process
@@ -429,7 +429,7 @@ mode" to build.
 
 **What was missing was telling anyone.** `/sweep` catches a dead token per
 user (`mark_reauthorization_required`), and now also emails that person the
-same onboarding link via `notifications.py` — sent from the shared system
+same onboarding link via `app/pipeline/notifications.py` — sent from the shared system
 identity, never from another account manager's mailbox. It fires exactly
 once per break: a user who's `reauthorization_required` drops out of
 `active_users()` until they re-consent, so the sweep can't re-notify them on
@@ -446,7 +446,7 @@ taxonomy, and an AM/GH lookup table are still deliberately deferred.
 
 Full design and reasoning in
 [`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md) —
-`ingestion.py` is its implementation, not a second copy of the same
+`app/pipeline/ingestion.py` is its implementation, not a second copy of the same
 decisions. Three things worth knowing before running it:
 
 - **Two Gmail queries per sweep, not one.** Branch A is watermark-bounded
@@ -474,18 +474,18 @@ themes). That fork is developed entirely as its own separate project at
 submodule — and only enters `HT-solutioning-agent` later, as a consumed
 package/build artifact once it's tested and fixed.
 
-Full plan: [`docs/deck-agent/11-presentation-md-fork.md`](docs/deck-agent/11-presentation-md-fork.md)
+Full plan: [`docs/deck-agent-plan.md`](docs/deck-agent-plan.md)
 — confirmed bugs found in the fork so far, the fix list, what to keep/cut
 from its packages, and the testing plan.
 
 The original build-from-scratch design (deck IR, deterministic layout
 engine, rectangles-only charts, a VLM QA loop, a 5-week MVP) is archived in
-[`docs/deck-agent/archive/`](docs/deck-agent/archive/) — superseded for
+[`archive/deck-agent-v1/`](archive/deck-agent-v1/) — superseded for
 *how the deck gets rendered*, but two pieces of it are still real and worth
-reading: **[archive/10-risks.md](docs/deck-agent/archive/10-risks.md) §1**
+reading: **[archive/deck-agent-v1/10-risks.md](archive/deck-agent-v1/10-risks.md) §1**
 predicted the exact `drive.file` scope bug that was found and fixed live on
 2026-09-23 (see step 2's scope notes above), and
-**[archive/08-lifecycle.md](docs/deck-agent/archive/08-lifecycle.md)**'s
+**[archive/deck-agent-v1/08-lifecycle.md](archive/deck-agent-v1/08-lifecycle.md)**'s
 locking/ownership model (`sales.agent@` owns the file, the human gets
 `commenter`, no mid-flight co-editing) applies regardless of what renders
 the deck.

@@ -17,7 +17,7 @@ from google.cloud import bigquery, secretmanager
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-from gmail_oauth import GMAIL_SCOPES
+from .gmail_oauth import GMAIL_SCOPES
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")

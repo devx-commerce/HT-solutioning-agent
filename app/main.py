@@ -40,12 +40,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google.cloud import bigquery
 
-import agent_client
-import gmail_oauth
-import ingestion
-import mail_utils
-from gmail_client import active_users, get_service_for_user, mark_reauthorization_required
-from notifications import send_reauth_prompt
+from .auth import gmail_oauth
+from .auth.gmail_client import active_users, get_service_for_user, mark_reauthorization_required
+from .pipeline import agent_client, ingestion, mail_utils
+from .pipeline.notifications import send_reauth_prompt
 
 app = FastAPI()
 log = logging.getLogger("solutioning_agent")

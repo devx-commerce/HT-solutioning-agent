@@ -3,8 +3,8 @@
 Built first for the deployment path to actually work end to end: registered
 and invoked from a Gemini Enterprise chat app, in HT's project, under
 whatever entitlements and IAM that project actually has. Research, evidence,
-and real deck content are `docs/deck-agent/`'s job, built as its own piece
-rather than bolted on here.
+and real deck content are `docs/deck-agent-plan.md`'s job, built as its own
+piece rather than bolted on here.
 """
 
 from __future__ import annotations

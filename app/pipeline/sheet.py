@@ -15,7 +15,7 @@ from datetime import datetime
 
 from googleapiclient.discovery import build
 
-from oauth_creds import get_credentials
+from ..auth.oauth_creds import get_credentials
 
 SHEET_ID = os.environ.get("BRIEFS_SHEET_ID", "")
 SHEET_RANGE = os.environ.get("BRIEFS_SHEET_RANGE", "Sheet1!A:I")

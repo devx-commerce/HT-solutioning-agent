@@ -32,14 +32,14 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-import agent_client
-import classify
-import labels
-import mail_utils
-import notifications
-import pubsub
-import sheet
-import storage
+from . import agent_client
+from . import classify
+from . import labels
+from . import mail_utils
+from . import notifications
+from . import pubsub
+from . import sheet
+from . import storage
 
 log = logging.getLogger("solutioning_agent.ingestion")
 

@@ -1,6 +1,6 @@
 # 11 — presentation-md fork: testing & fixing plan
 
-Supersedes the "build vs. integrate" verdict in [01](01-decisions.md) for the
+Supersedes the "build vs. integrate" verdict in [01](../archive/deck-agent-v1/01-decisions.md) for the
 generation layer only. The design-quality bar it clears — real editable text
 boxes/tables, a native OOXML chart object, a working layout/theme system for
 at least 2 themes — is good enough that patching known, scoped bugs beats
@@ -23,7 +23,7 @@ inside this project's own working tree.
 | 3 | `--scaffold sales` (and likely other recipes) emits schema-**invalid** JSON by default — `timeline` slide items use `title`, the schema requires `label`. Ships broken out of the box. | live scaffold + `--audit`/render | Medium — easy to work around once known (rename at generation time), but any LLM prompted from their own docs would hit this blind. |
 | 4 | `timeline` layout silently drops all `items` content — heading renders, item text never appears, in both HTML and PPTX (verified by reading raw OOXML text runs in the pptx). No audit error, no warning. Passes `--audit` clean. | reproduced twice, npm build and fork source build | High — silent data loss is the worst failure mode for an unattended pipeline. |
 | 5 | Placeholder strings from `--scaffold` are literal, not templated — setting `meta.title` does not propagate; every field needs an explicit sweep or stray placeholder text ships in the final deck. | live test, found `"Untitled deck"` in final pptx text runs | Medium — process discipline, not a code fix. |
-| 6 | Native `chart` layout (`bar`/`horizontal-bar`/`line`/`area`/`pie`/`donut`) produces a **real OOXML chart object** (`ppt/charts/chart*.xml`, `<p:graphicFrame>`/`c:chart`), not a rasterized image — verified by unzipping the pptx. This clears the editability bar [01](01-decisions.md) set for charts. | bar + donut tested | Positive finding — build on this, don't write a custom chart renderer. |
+| 6 | Native `chart` layout (`bar`/`horizontal-bar`/`line`/`area`/`pie`/`donut`) produces a **real OOXML chart object** (`ppt/charts/chart*.xml`, `<p:graphicFrame>`/`c:chart`), not a rasterized image — verified by unzipping the pptx. This clears the editability bar [01](../archive/deck-agent-v1/01-decisions.md) set for charts. | bar + donut tested | Positive finding — build on this, don't write a custom chart renderer. |
 
 ## Scope: what to keep, what to cut
 
