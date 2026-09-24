@@ -202,7 +202,7 @@ def execute_build(payload: dict) -> str:
     Pub/Sub is at-least-once — a redelivered message for an already-built
     or already-failed thread is acknowledged as a no-op, not reprocessed.
     """
-    from gmail_client import get_service_for_user  # avoids a circular import with app.main
+    from ..auth.gmail_client import get_service_for_user  # avoids a circular import with app.main
 
     thread_id = payload["thread_id"]
     existing = storage.thread_status(thread_id)
