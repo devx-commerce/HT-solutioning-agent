@@ -41,9 +41,6 @@ LinkedIn/Instagram/X/Facebook posts — with real source URLs, no scraping).
 (email thread first, grounded search as fallback, never guessed — skip and
 note a gap rather than invent a URL).
 
-**Deprioritized (tertiary, later):** Competitor Analysis Tool integration,
-Salesforce integration.
-
 **Grounding invariant, hard requirement:** every factual claim carries its
 `source_url`. Graded by the SOW's "Evidentiary grounding" metric — 100% of
 drafts must carry at least one cited prior-campaign or competitor source.
@@ -98,12 +95,8 @@ One message (SOW §5.2): the brief, an evidence summary (grounded findings
 with sources), the gaps/open-questions identified, and the draft deck link —
 using the SOW's own terms ("evidence summary," "gaps").
 
-## Explicitly out of scope for now
-
-Competitor Analysis Tool integration, Salesforce integration, AI image
-generation in decks (no SOW basis; if revisited, gate on "only if no real
-brand/client asset exists," fixed aspect-ratio/resolution enum enforced by
-the tool call).
+Deprioritized/deferred items (Competitor Analysis Tool, Salesforce, image
+generation, etc.) live in `docs/open-items.md`, not here.
 
 ## BigQuery
 
