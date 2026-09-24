@@ -108,6 +108,23 @@ def _list_branch_b(gmail) -> list[str]:
     return [m["id"] for m in resp.get("messages", [])]
 
 
+def _thread_lock_reason(existing_thread: dict | None, triggered_by: str) -> str | None:
+    """None means proceed, otherwise the reason it's blocked.
+
+    See docs/EMAIL-POLLER-DESIGN.md "Thread locking" for the full rule table
+    and rationale — this is the implementation of that table, not a second
+    copy of it.
+    """
+    if existing_thread is None:
+        return None
+    status = existing_thread["status"]
+    if status == "building":
+        return "thread is currently building"
+    if status == "built" and triggered_by != "branch_b":
+        return "thread already built (use the manual generate-deck label to force a rebuild)"
+    return None
+
+
 def _process_branch_a(
     gmail, gmail_secret: str, message_id: str, *, force: bool, dry_run: bool
 ) -> str:
@@ -116,16 +133,20 @@ def _process_branch_a(
 
     msg = mail_utils.fetch_message(gmail, message_id)
 
-    if not force:
-        existing_thread = storage.thread_status(msg.thread_id)
-        if existing_thread is not None:
-            storage.record_decision(
-                message_id, "thread_already_active",
-                f"thread {msg.thread_id} already has status={existing_thread['status']}",
-            )
-            return "skipped"
+    # Always checked, regardless of force — force only re-runs classification;
+    # it never bypasses the thread lock (see docs/EMAIL-POLLER-DESIGN.md).
+    existing_thread = storage.thread_status(msg.thread_id)
+    lock_reason = _thread_lock_reason(existing_thread, "branch_a")
+    if lock_reason is not None:
+        if not force:
+            storage.record_decision(message_id, "thread_already_active", lock_reason)
+        return "skipped"
 
-    result = classify.classify_and_extract(msg.subject, msg.body)
+    # Classify against the whole thread so far, not just this one message —
+    # the substance (budget, timeline, a scope change) often lands in a
+    # later reply, not whichever message happened to trip the filter first.
+    thread_context = mail_utils.fetch_thread_context(gmail, msg.thread_id)
+    result = classify.classify_and_extract(msg.subject, thread_context)
     storage.record_decision(
         message_id,
         "solution_request" if result.is_solution_request else "not_a_request",
@@ -137,7 +158,7 @@ def _process_branch_a(
         return "rejected"
 
     _enqueue(
-        gmail_secret, msg,
+        gmail_secret, msg, thread_context,
         client_name=result.client_name, brief=result.brief,
         touchpoints=result.touchpoints, category=result.category,
         triggered_by="branch_a", dry_run=dry_run,
@@ -152,7 +173,18 @@ def _process_branch_b(
         return "skipped"
 
     msg = mail_utils.fetch_message(gmail, message_id)
-    result = classify.extract_only(msg.subject, msg.body)
+
+    # See _thread_lock_reason — branch_b (an explicit human label) is the
+    # one case allowed to override an already-'built' thread.
+    existing_thread = storage.thread_status(msg.thread_id)
+    lock_reason = _thread_lock_reason(existing_thread, "branch_b")
+    if lock_reason is not None:
+        if not force:
+            storage.record_decision(message_id, "thread_already_active", lock_reason)
+        return "skipped"
+
+    thread_context = mail_utils.fetch_thread_context(gmail, msg.thread_id)
+    result = classify.extract_only(msg.subject, thread_context)
 
     if not result.has_content:
         storage.record_decision(
@@ -165,7 +197,7 @@ def _process_branch_b(
         message_id, "manual_flag_queued", "human-labeled generate-deck",
     )
     _enqueue(
-        gmail_secret, msg,
+        gmail_secret, msg, thread_context,
         client_name=result.client_name, brief=result.brief,
         touchpoints=result.touchpoints, category=result.category,
         triggered_by="branch_b", dry_run=dry_run,
@@ -174,7 +206,7 @@ def _process_branch_b(
 
 
 def _enqueue(
-    gmail_secret: str, msg: mail_utils.ParsedMessage,
+    gmail_secret: str, msg: mail_utils.ParsedMessage, thread_context: str,
     client_name, brief, touchpoints, category, triggered_by: str, dry_run: bool,
 ) -> None:
     storage.open_thread(msg.thread_id, triggered_by)
@@ -183,7 +215,7 @@ def _enqueue(
         message_id=msg.message_id,
         thread_id=msg.thread_id,
         subject=msg.subject,
-        body=msg.body,
+        thread_context=thread_context,
         received_at=msg.received_at.isoformat(),
         sender=msg.sender,
         rfc_message_id=msg.rfc_message_id,
@@ -205,20 +237,19 @@ def execute_build(payload: dict) -> str:
     from ..auth.gmail_client import get_service_for_user  # avoids a circular import with app.main
 
     thread_id = payload["thread_id"]
+    # Also the stale/redelivered-message guard: a genuine new trigger always
+    # calls storage.open_thread (resetting status to 'building') before
+    # publishing, so only a duplicate delivery of an already-completed task
+    # still observes 'built'/'failed' here.
     existing = storage.thread_status(thread_id)
     if existing is not None and existing["status"] in ("built", "failed"):
         return existing["status"]
 
     gmail = get_service_for_user(payload["gmail_secret"])
-    msg = mail_utils.ParsedMessage(
-        message_id=payload["message_id"],
-        thread_id=thread_id,
-        subject=payload["subject"],
-        body=payload["body"],
-        received_at=datetime.fromisoformat(payload["received_at"]),
-        sender=payload["sender"],
-        rfc_message_id=payload["rfc_message_id"],
-    )
+    message_id = payload["message_id"]
+    subject = payload["subject"]
+    thread_context = payload["thread_context"]
+    received_at = datetime.fromisoformat(payload["received_at"])
 
     if payload.get("dry_run"):
         # Deterministic, on purpose — no text-parsing of a model's reply.
@@ -229,26 +260,27 @@ def execute_build(payload: dict) -> str:
         reply = _DRY_RUN_REPLY
     else:
         reply = agent_client.invoke_agent(
-            f"An email came in. Subject: {msg.subject}\n\nBody:\n{msg.body}\n\n"
+            f"An email thread came in. Subject: {subject}\n\n"
+            f"Full thread so far:\n{thread_context}\n\n"
             "Build a placeholder solution deck for whoever this is from.",
             session_user_id=f"ingestion-{thread_id}",
         )
         if "docs.google.com/presentation" not in reply:
             log.warning(
                 "ingestion.build_failed",
-                extra={"thread_id": thread_id, "message_id": msg.message_id},
+                extra={"thread_id": thread_id, "message_id": message_id},
             )
             storage.mark_thread_failed(thread_id, reply[:500])
             return "failed"
 
-    labels.apply_label(gmail, msg.message_id, labels.DECK_GENERATED_LABEL)
+    labels.apply_label(gmail, message_id, labels.DECK_GENERATED_LABEL)
     notifications.send_deck_notification(payload["client_name"], payload["brief"])
     sheet.append_row(
         client_name=payload["client_name"],
         brief=payload["brief"],
         touchpoints=payload["touchpoints"],
         category=payload["category"],
-        month=sheet.month_label(msg.received_at),
+        month=sheet.month_label(received_at),
     )
     storage.mark_thread_sheet_written(thread_id)
     storage.mark_thread_built(thread_id, brief_id=thread_id)

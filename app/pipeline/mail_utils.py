@@ -45,3 +45,22 @@ def fetch_message(gmail, message_id: str) -> ParsedMessage:
         sender=headers.get("From", ""),
         rfc_message_id=headers.get("Message-ID", ""),
     )
+
+
+def fetch_thread_context(gmail, thread_id: str) -> str:
+    """The whole thread's content, oldest first, one block per message.
+
+    A thread can carry its real substance in a later reply (budget,
+    timeline, a scope change) rather than the message that happened to
+    trigger classification — classify against the whole conversation, not
+    just whichever single message tripped the filter.
+    """
+    thread = gmail.users().threads().get(userId="me", id=thread_id, format="full").execute()
+    blocks = []
+    for msg in thread.get("messages", []):
+        headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+        sender = headers.get("From", "")
+        date = headers.get("Date", "")
+        body = _walk_for_plain_text(msg["payload"])
+        blocks.append(f"From: {sender}\nDate: {date}\n\n{body}")
+    return "\n\n---\n\n".join(blocks)

@@ -36,12 +36,17 @@ GMAIL_SCOPES = [
     "openid",
     "email",
     "profile",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    # Label management only — not gmail.modify, which would also grant
-    # content changes. The poller only ever applies/reads labels, never
-    # touches message content. Adding this after mailboxes were already
-    # onboarded under readonly-only requires those mailboxes to re-consent.
-    "https://www.googleapis.com/auth/gmail.labels",
+    # gmail.labels was tried first on the assumption it covers applying a
+    # label to a message, same as it covers creating/listing labels. It
+    # doesn't — messages.modify (used to actually attach a label id to a
+    # message) 403s with "Insufficient Permission" under gmail.labels alone;
+    # confirmed live 2026-09-24, first time this path was actually
+    # exercised. gmail.modify is the narrowest scope that covers both label
+    # management and applying a label — it also implies read access, so
+    # gmail.readonly is redundant alongside it. Same as before: changing
+    # the per-mailbox scope means already-onboarded mailboxes must
+    # re-consent via /oauth/gmail/start.
+    "https://www.googleapis.com/auth/gmail.modify",
 ]
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
@@ -141,13 +146,40 @@ def _store_refresh_token(secret_id: str, refresh_token: str) -> None:
     client = secretmanager.SecretManagerServiceClient()
     parent = f"projects/{PROJECT}"
     secret_path = f"{parent}/secrets/{secret_id}"
+    is_new = False
     try:
         client.get_secret(name=secret_path)
     except Exception:
         client.create_secret(
             parent=parent, secret_id=secret_id, secret={"replication": {"automatic": {}}}
         )
+        is_new = True
     client.add_secret_version(parent=secret_path, payload={"data": refresh_token.encode()})
+
+    if is_new:
+        # A freshly created secret has no IAM bindings at all — not even
+        # for the identity that just created it. Grant read access to
+        # whichever identity is running right now, since in this
+        # deployment both Cloud Run services (this one, and the private
+        # one that later reads this secret via gmail_client.py) run as
+        # the same service account. Missing this silently broke every
+        # first sweep after onboarding — see docs/logs/ for the incident.
+        # google.auth.default()'s credentials object doesn't reliably expose
+        # the running service account's actual email — ask the metadata
+        # server directly, the standard way to get it on Cloud Run/GCE.
+        resp = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/"
+            "service-accounts/default/email",
+            headers={"Metadata-Flavor": "Google"},
+            timeout=5,
+        )
+        principal = resp.text.strip()
+        policy = client.get_iam_policy(request={"resource": secret_path})
+        policy.bindings.add(
+            role="roles/secretmanager.secretAccessor",
+            members=[f"serviceAccount:{principal}"],
+        )
+        client.set_iam_policy(request={"resource": secret_path, "policy": policy})
 
 
 def _upsert_user(email: str, secret_id: str) -> None:

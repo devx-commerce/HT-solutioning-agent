@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-GENERATE_DECK_LABEL = "solutioning-agent/generate-deck"
-DECK_GENERATED_LABEL = "solutioning-agent/deck-generated"
+GENERATE_DECK_LABEL = "generate-deck"
+DECK_GENERATED_LABEL = "deck-generated"
 
 
 @lru_cache(maxsize=64)

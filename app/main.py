@@ -144,7 +144,13 @@ def sweep(force: bool = False, dry_run: bool = False) -> dict:
                 )
             )
         except Exception as exc:
-            log.warning("sweep.user_failed", extra={"email": user["email"], "error": str(exc)})
+            # extra={} fields don't reach Cloud Logging's textPayload with
+            # this app's plain logging.getLogger setup (no structured/JSON
+            # handler configured) — they were silently swallowed, which cost
+            # real debugging time tracking down a genuine classify.py bug
+            # tonight. Put the error in the message itself so it's always
+            # visible regardless of handler config.
+            log.warning(f"sweep.user_failed email={user['email']} error={exc!r}")
             mark_reauthorization_required(user["email"])
             # Fires exactly once per break: active_users() only ever returns
             # status='active' rows, so this user drops out of the next sweep

@@ -126,21 +126,42 @@ def thread_status(thread_id: str) -> dict | None:
 
 
 def open_thread(thread_id: str, triggered_by: str) -> None:
+    # MERGE, not a plain INSERT — this also re-opens a thread that already
+    # has a row (a manual generate-deck override on an already-built
+    # thread, or a fresh message retrying one marked failed), resetting it
+    # to 'building' in place rather than creating a second row for the
+    # same thread_id. See ingestion.py's thread-lock rules for when a
+    # re-open is actually allowed to happen.
+    #
+    # DML (MERGE/INSERT), not insert_rows_json (streaming) — a row from the
+    # streaming API sits in BigQuery's streaming buffer for up to ~90
+    # minutes, during which UPDATE/DELETE on it is rejected outright. Every
+    # thread this opens gets UPDATEd within seconds by mark_thread_built /
+    # mark_thread_sheet_written, so streaming insert here always broke that
+    # immediately. Confirmed live 2026-09-24. DML has no such buffer.
     now = datetime.now(timezone.utc).isoformat()
-    _client().insert_rows_json(
-        f"{PROJECT}.{DATASET}.ingestion_threads",
-        [
-            {
-                "thread_id": thread_id,
-                "status": "building",
-                "triggered_by": triggered_by,
-                "sheet_row_written": False,
-                "brief_id": None,
-                "created_at": now,
-                "updated_at": now,
-            }
-        ],
-    )
+    _client().query(
+        f"""
+        MERGE `{PROJECT}.{DATASET}.ingestion_threads` T
+        USING (SELECT @thread_id AS thread_id) S ON T.thread_id = S.thread_id
+        WHEN MATCHED THEN UPDATE SET
+          status = 'building',
+          triggered_by = @triggered_by,
+          sheet_row_written = FALSE,
+          brief_id = NULL,
+          updated_at = @now
+        WHEN NOT MATCHED THEN
+          INSERT (thread_id, status, triggered_by, sheet_row_written, brief_id, created_at, updated_at)
+          VALUES (@thread_id, 'building', @triggered_by, FALSE, NULL, @now, @now)
+        """,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("thread_id", "STRING", thread_id),
+                bigquery.ScalarQueryParameter("triggered_by", "STRING", triggered_by),
+                bigquery.ScalarQueryParameter("now", "TIMESTAMP", now),
+            ]
+        ),
+    ).result()
 
 
 def _update_thread(thread_id: str, **fields) -> None:

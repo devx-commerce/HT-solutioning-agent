@@ -20,7 +20,10 @@ from google.genai import types
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-MODEL = os.environ.get("CLASSIFY_MODEL", "gemini-2.0-flash-lite")
+# gemini-2.0-flash-lite is not a valid model in this project/region — 404s
+# every time (confirmed live 2026-09-24). gemini-2.5-flash-lite is the real
+# cheap-tier model that actually exists here.
+MODEL = os.environ.get("CLASSIFY_MODEL", "gemini-2.5-flash-lite")
 
 # Touchpoints must map to one of these or stay blank — never a free-text
 # guess. Category is deliberately the same shape even though whether it
@@ -118,13 +121,23 @@ Leave any field null rather than invent a value.
 
 
 def classify_and_extract(subject: str, body: str) -> ClassifyResult:
-    response = _client().models.generate_content(
+    # Must bind to a variable, not chain _client().models.generate_content()
+    # inline — the temporary Client object's refcount can hit zero mid
+    # expression once .models is accessed, closing its internal httpx
+    # client before generate_content() runs, which surfaces as "Cannot
+    # send a request, as the client has been closed." Confirmed live
+    # 2026-09-24 — classification had never actually worked until this.
+    client = _client()
+    response = client.models.generate_content(
         model=MODEL,
         contents=f"Subject: {subject}\n\nBody:\n{body}",
         config=types.GenerateContentConfig(
             system_instruction=_CLASSIFY_INSTRUCTION,
             response_mime_type="application/json",
             response_schema=_CLASSIFY_SCHEMA,
+            # No tools are ever passed here, so AFC has nothing to do —
+            # disabling it avoids the SDK's own "not recommended" warning.
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         ),
     )
     data = json.loads(response.text)
@@ -140,13 +153,15 @@ def classify_and_extract(subject: str, body: str) -> ClassifyResult:
 
 
 def extract_only(subject: str, body: str) -> ExtractResult:
-    response = _client().models.generate_content(
+    client = _client()  # see classify_and_extract's comment on why this must be bound
+    response = client.models.generate_content(
         model=MODEL,
         contents=f"Subject: {subject}\n\nBody:\n{body}",
         config=types.GenerateContentConfig(
             system_instruction=_EXTRACT_INSTRUCTION,
             response_mime_type="application/json",
             response_schema=_EXTRACT_SCHEMA,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         ),
     )
     data = json.loads(response.text)
