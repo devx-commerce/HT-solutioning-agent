@@ -163,3 +163,33 @@ def test_branch_a_classifies_against_full_thread_not_single_message(mock_storage
         called_subject, called_body = mock_classify.classify_and_extract.call_args[0]
         assert called_body == "SUBSTANCE: budget $50k, launches in June"
         assert called_body != _fake_message().body
+
+
+# --- the sweep must not read the agent's own notifications back ------------
+# The deck-built notification goes to SOLUTIONING_NOTIFY_EMAIL, which is the
+# same mailbox being swept, so a missing exclusion here is a self-trigger
+# loop — one such notification classified as a solution request live.
+
+
+def test_self_filter_excludes_own_sends_and_notify_address(monkeypatch):
+    monkeypatch.setenv("SOLUTIONING_NOTIFY_EMAIL", "sales.agent@hindustantimes.com")
+    assert ingestion._self_filter() == (
+        "-from:me -from:sales.agent@hindustantimes.com"
+    )
+
+
+def test_self_filter_without_notify_address_still_excludes_own_sends(monkeypatch):
+    monkeypatch.delenv("SOLUTIONING_NOTIFY_EMAIL", raising=False)
+    assert ingestion._self_filter() == "-from:me"
+
+
+def test_branch_a_query_carries_the_self_filter(monkeypatch):
+    monkeypatch.setenv("SOLUTIONING_NOTIFY_EMAIL", "sales.agent@hindustantimes.com")
+    gmail = MagicMock()
+    gmail.users().messages().list().execute.return_value = {"messages": []}
+
+    ingestion._list_branch_a(gmail, datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+    query = gmail.users().messages().list.call_args.kwargs["q"]
+    assert "-from:me" in query
+    assert "-from:sales.agent@hindustantimes.com" in query

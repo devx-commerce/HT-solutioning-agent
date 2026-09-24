@@ -30,6 +30,7 @@ Two testing knobs on the classify-and-enqueue half, both off by default:
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import datetime, timezone
 
@@ -46,6 +47,18 @@ log = logging.getLogger("solutioning_agent.ingestion")
 
 _NOISE_FILTER = "-category:promotions -category:social -in:chats"
 _DRY_RUN_REPLY = "[dry-run] https://docs.google.com/presentation/d/DRY-RUN-NO-DECK-BUILT/edit"
+
+
+def _self_filter() -> str:
+    """Exclude the agent's own mail from its own sweep.
+
+    The deck-built notification goes to SOLUTIONING_NOTIFY_EMAIL, currently
+    the same mailbox this sweeps, so without this the agent reads its own
+    notifications back as new requests. Confirmed live: one such
+    notification classified as a solution request at confidence 1.00.
+    """
+    notify = os.environ.get("SOLUTIONING_NOTIFY_EMAIL", "").strip()
+    return "-from:me" + (f" -from:{notify}" if notify else "")
 
 
 def run_sweep_for_user(
@@ -98,7 +111,10 @@ def _tally(outcome: str, queued: int, rejected: int, skipped: int) -> tuple[int,
 
 
 def _list_branch_a(gmail, cutoff: datetime) -> list[str]:
-    query = f"in:inbox {_NOISE_FILTER} after:{int(cutoff.timestamp())}"
+    query = (
+        f"in:inbox {_NOISE_FILTER} {_self_filter()} "
+        f"after:{int(cutoff.timestamp())}"
+    )
     resp = gmail.users().messages().list(userId="me", q=query).execute()
     return [m["id"] for m in resp.get("messages", [])]
 
