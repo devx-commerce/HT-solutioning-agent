@@ -140,18 +140,17 @@ Six tables: `briefs`, `decisions`, `users`, `sweep_state` (the watermark),
 [`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md) for why
 `sweep_state`/`ingestion_threads` exist.
 
-## 5 — Drive template, and the solutioning briefs sheet
+## 5 — Deck rendering, and the solutioning briefs sheet
 
-> **Obsolete, pending rewrite:** the client has confirmed no Slides template
-> exists. `TEMPLATE_FILE_ID` and `build_solution_deck`'s copy-and-replace flow
-> are being replaced by a presentation-md Deck JSON → Slides upload pipeline —
-> see [`docs/research-and-rendering-decisions.md`](docs/research-and-rendering-decisions.md#7-deck-rendering-presentation-md-deck-json-as-system-of-record).
-> Steps below still describe the current (soon to change) code.
+There is no Slides template to create — HT doesn't have one. Decks are
+rendered from Deck JSON by `presentation-md` and uploaded to Drive, which
+converts the pptx to native Slides. Point `PRESENTATION_MD_CLI` at that
+repo's `packages/renderer-node/dist/cli.js`, and set `DECK_READER_DOMAIN` so
+generated decks are readable by the domain. See
+[`docs/research-and-rendering-decisions.md`](docs/research-and-rendering-decisions.md)
+— including the unresolved question of where Node runs once deployed.
 
-Create one Slides file with `{{CLIENT_NAME}}` and `{{NOTES}}` placeholders,
-owned by whoever ran step 3. Copy its file id into `TEMPLATE_FILE_ID`.
-
-Same pattern, one more artefact: create the solutioning briefs Sheet by hand,
+Create the solutioning briefs Sheet by hand,
 header row matching the nine columns in
 [`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md), share it with
 `sales.agent@hindustantimes.com` as an Editor, and copy its id into

@@ -1,169 +1,347 @@
-"""Three tools: create a deck, find one you already made, and edit it.
+"""Deck tools: Deck JSON in, a Google Slides link out.
 
-Lives inside the agent's own package (not at the repo root, where an
-earlier version of this file sat) because `adk deploy agent_engine` only
-bundles the agent's own directory — nothing outside it makes it into the
-deployed package, and there's no CLI flag to include extra local packages
-(checked: `adk deploy agent_engine --help` has no such option). See
-agents/solutioning_agent/oauth_creds.py for the same reasoning applied to
-its own dependency.
+Deck JSON is the system of record, not the Slides file. HT has no Slides
+template to copy, so decks are rendered by `presentation-md` (Deck JSON →
+pptx) and uploaded to Drive, which converts the pptx to native Slides. A
+revision patches the stored Deck JSON, re-renders, and replaces the file's
+content via `files().update` — the same file id throughout, so links and
+permissions already handed out keep working.
 
-The find/edit pair exists for one reason — refinement across separate chat
-sessions. Inside a single GE conversation, the agent already remembers the
-deck it just built; open a new session tomorrow (or refine something the
-email flow produced) and that memory is gone. lookup_deck reads BigQuery to
-recover the deck id from a name; update_deck edits the deck that's already
-there instead of creating a duplicate.
+The agent owns the file; people get read access. Someone who wants to edit
+takes their own copy, which keeps their edits out of the path a later
+revision re-renders.
+
+Lives inside the agent's own package because `adk deploy agent_engine`
+bundles only this directory — see oauth_creds.py for the same constraint.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import tempfile
+from datetime import datetime, timezone
 
 from google.cloud import bigquery
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 from ..oauth_creds import get_credentials
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
+NODE_BIN = os.environ.get("NODE_BIN", "node")
+RENDER_CLI = os.environ.get("PRESENTATION_MD_CLI", "")
+DECK_FOLDER_ID = os.environ.get("DECK_FOLDER_ID", "")
+DECK_READER_DOMAIN = os.environ.get("DECK_READER_DOMAIN", "")
+
+_SLIDES_MIME = "application/vnd.google-apps.presentation"
+_PPTX_MIME = (
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+)
+_RENDER_TIMEOUT = 120
 
 
-def build_solution_deck(client_name: str, note: str) -> dict:
-    """Copy the template deck and replace its two placeholder tokens.
+class DeckRenderError(RuntimeError):
+    """presentation-md rejected the deck or failed to render it."""
+
+
+def _normalize_deck_json(deck_json: str) -> str:
+    """Re-serialize so a literal newline inside a string value isn't fatal.
+
+    Models routinely emit real control characters inside JSON strings, which
+    strict parsers reject. `strict=False` accepts them, and re-dumping
+    escapes them properly — worth doing because the alternative is the model
+    burning a whole round-trip rediscovering it wrote invalid JSON.
+    """
+    try:
+        return json.dumps(json.loads(deck_json, strict=False))
+    except json.JSONDecodeError:
+        return deck_json  # let the renderer report what's actually wrong
+
+
+def _render_pptx(deck_json: str) -> bytes:
+    """Deck JSON → pptx bytes, via presentation-md's renderer CLI.
+
+    The CLI validates against deck.schema.json before rendering, so an
+    invalid deck fails here with the schema's own error text rather than
+    producing a broken file.
+    """
+    deck_json = _normalize_deck_json(deck_json)
+    if not RENDER_CLI:
+        raise DeckRenderError(
+            "PRESENTATION_MD_CLI is not set — no renderer available."
+        )
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "deck.pptx")
+        proc = subprocess.run(
+            [NODE_BIN, RENDER_CLI, "-f", "pptx", "-o", out],
+            input=deck_json.encode("utf-8"),
+            capture_output=True,
+            timeout=_RENDER_TIMEOUT,
+        )
+        if proc.returncode != 0 or not os.path.exists(out):
+            raise DeckRenderError(
+                (proc.stderr or proc.stdout).decode("utf-8", "replace").strip()[:1000]
+            )
+        with open(out, "rb") as fh:
+            return fh.read()
+
+
+def _upload_pptx(pptx: bytes, *, name: str, file_id: str) -> dict:
+    """Create a new Slides file, or replace an existing one keeping its id."""
+    drive = build("drive", "v3", credentials=get_credentials())
+    with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as fh:
+        fh.write(pptx)
+        path = fh.name
+    try:
+        media = MediaFileUpload(path, mimetype=_PPTX_MIME, resumable=False)
+        if file_id:
+            return drive.files().update(
+                fileId=file_id, media_body=media, fields="id,webViewLink"
+            ).execute()
+        body = {"name": name, "mimeType": _SLIDES_MIME}
+        if DECK_FOLDER_ID:
+            body["parents"] = [DECK_FOLDER_ID]
+        created = drive.files().create(
+            body=body, media_body=media, fields="id,webViewLink"
+        ).execute()
+        _lock_to_readers(drive, created["id"])
+        return created
+    finally:
+        os.unlink(path)
+
+
+def _lock_to_readers(drive, file_id: str) -> None:
+    """Read-only for everyone but the agent. Never fatal — a deck still beats no deck."""
+    if not DECK_READER_DOMAIN:
+        return
+    try:
+        drive.permissions().create(
+            fileId=file_id,
+            body={"type": "domain", "role": "reader", "domain": DECK_READER_DOMAIN},
+            fields="id",
+        ).execute()
+    except Exception:  # noqa: BLE001 - surfaced by the deck simply not being shared
+        pass
+
+
+def _save_brief(brief_id: str, **fields) -> None:
+    """MERGE, not a streaming insert.
+
+    A streamed row sits in BigQuery's buffer for up to ~90 minutes and
+    rejects UPDATE the whole time, which would break the very next revision.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    sets = ", ".join(f"{k} = @{k}" for k in fields)
+    cols = ", ".join(["brief_id", *fields, "created_at", "updated_at"])
+    vals = ", ".join(["@brief_id", *(f"@{k}" for k in fields), "@now", "@now"])
+    params = [
+        bigquery.ScalarQueryParameter(k, "STRING", v) for k, v in fields.items()
+    ] + [
+        bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id),
+        bigquery.ScalarQueryParameter("now", "TIMESTAMP", now),
+    ]
+    bigquery.Client(project=PROJECT).query(
+        f"""
+        MERGE `{PROJECT}.{DATASET}.briefs` T
+        USING (SELECT @brief_id AS brief_id) S ON T.brief_id = S.brief_id
+        WHEN MATCHED THEN UPDATE SET {sets}, updated_at = @now
+        WHEN NOT MATCHED THEN INSERT ({cols}) VALUES ({vals})
+        """,
+        job_config=bigquery.QueryJobConfig(query_parameters=params),
+    ).result()
+
+
+def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict:
+    """Render a deck from Deck JSON and publish it as Google Slides.
 
     Args:
-        client_name: goes into the {{CLIENT_NAME}} placeholder.
-        note: goes into the {{NOTES}} placeholder.
+        deck_json: the complete deck as JSON, matching presentation-md's
+            deck schema — an object with "type": "deck" and a "slides" array.
+        client_name: who the deck is for; used to name the file.
+        brief_id: the brief this deck belongs to. Pass "" when there isn't
+            one and the deck's own file id becomes the brief id.
 
     Returns:
-        The new deck's file id and a link to open it.
+        The deck's brief_id, file id and link, or an error explaining what
+        the deck schema rejected.
     """
-    template_file_id = os.environ["TEMPLATE_FILE_ID"]
-    creds = get_credentials()
-    drive = build("drive", "v3", credentials=creds)
-    slides = build("slides", "v1", credentials=creds)
+    # Normalize before both rendering and storing, so the stored copy is
+    # always strictly parseable by a later update_deck.
+    deck_json = _normalize_deck_json(deck_json)
+    try:
+        pptx = _render_pptx(deck_json)
+    except (DeckRenderError, subprocess.SubprocessError) as exc:
+        return {"error": f"Deck was not valid, nothing was published: {exc}"}
 
-    copy = drive.files().copy(
-        fileId=template_file_id,
-        body={"name": f"Solution Deck — {client_name}"},
-    ).execute()
-    deck_id = copy["id"]
+    created = _upload_pptx(
+        pptx, name=f"Solution Deck — {client_name}", file_id=""
+    )
+    deck_id = created["id"]
+    link = created.get("webViewLink") or (
+        f"https://docs.google.com/presentation/d/{deck_id}/edit"
+    )
+    resolved_brief = brief_id or deck_id
+    _save_brief(
+        resolved_brief,
+        client_name=client_name,
+        status="drafted",
+        deck_file_id=deck_id,
+        deck_link=link,
+        deck_json=deck_json,
+    )
+    return {"brief_id": resolved_brief, "deck_id": deck_id, "link": link}
 
-    slides.presentations().batchUpdate(
-        presentationId=deck_id,
-        body={
-            "requests": [
-                {
-                    "replaceAllText": {
-                        "containsText": {"text": "{{CLIENT_NAME}}"},
-                        "replaceText": client_name,
-                    }
-                },
-                {
-                    "replaceAllText": {
-                        "containsText": {"text": "{{NOTES}}"},
-                        "replaceText": note,
-                    }
-                },
-            ]
-        },
-    ).execute()
 
-    _record_brief(client_name, deck_id)
+def update_deck(brief_id: str, edits_json: str) -> dict:
+    """Change specific fields on specific slides of a deck already built.
 
+    Everything not named in the edits is left exactly as it was — this
+    patches the stored deck rather than regenerating it.
+
+    Args:
+        brief_id: which brief's deck to change, from build_solution_deck or
+            lookup_deck. Never invented.
+        edits_json: a JSON array of edits, each
+            {"slide_index": 0-based int, "field": name, "value": new text}.
+            For example: [{"slide_index": 2, "field": "heading",
+            "value": "Festive reach"}].
+
+    Returns:
+        The deck's link and which edits were applied, or an error naming
+        what could not be found.
+    """
+    stored = _load_brief(brief_id)
+    if not stored or not stored.get("deck_json"):
+        return {"error": f"No stored deck found for brief_id {brief_id}."}
+    try:
+        edits = json.loads(edits_json)
+        deck = json.loads(stored["deck_json"])
+    except json.JSONDecodeError as exc:
+        return {"error": f"Could not read the edits or the stored deck: {exc}"}
+    if not isinstance(edits, list):
+        return {"error": 'edits_json must be a JSON array of {"slide_index", "field", "value"}.'}
+
+    slides = deck.get("slides") or []
+    applied = []
+    for edit in edits:
+        index, field = edit.get("slide_index"), edit.get("field")
+        if not isinstance(index, int) or not 0 <= index < len(slides):
+            return {"error": f"slide_index {index} is outside this deck's {len(slides)} slides."}
+        if not field:
+            return {"error": "Every edit needs a field name."}
+        slides[index][field] = edit.get("value")
+        applied.append(f"slide {index}: {field}")
+
+    updated_json = json.dumps(deck)
+    try:
+        pptx = _render_pptx(updated_json)
+    except (DeckRenderError, subprocess.SubprocessError) as exc:
+        return {"error": f"Edit rejected, the deck is unchanged: {exc}"}
+
+    _upload_pptx(pptx, name="", file_id=stored["deck_file_id"])
+    _save_brief(brief_id, deck_json=updated_json, status="drafted")
     return {
-        "deck_id": deck_id,
-        "link": f"https://docs.google.com/presentation/d/{deck_id}/edit",
+        "brief_id": brief_id,
+        "link": stored["deck_link"],
+        "edits_applied": applied,
     }
 
 
-def _record_brief(client_name: str, deck_file_id: str) -> None:
-    """One row per deck, so a later session can find it by name."""
-    from datetime import datetime, timezone
-
-    client = bigquery.Client(project=PROJECT)
-    now = datetime.now(timezone.utc).isoformat()
-    client.insert_rows_json(
-        f"{PROJECT}.{DATASET}.briefs",
-        [
-            {
-                "brief_id": deck_file_id,
-                "message_id": None,
-                "client_name": client_name,
-                "status": "drafted",
-                "attempts": 0,
-                "detail": None,
-                "deck_file_id": deck_file_id,
-                "deck_link": f"https://docs.google.com/presentation/d/{deck_file_id}/edit",
-                "created_at": now,
-                "updated_at": now,
-            }
-        ],
+def _load_brief(brief_id: str) -> dict | None:
+    rows = list(
+        bigquery.Client(project=PROJECT).query(
+            f"""
+            SELECT brief_id, client_name, deck_file_id, deck_link, deck_json
+            FROM `{PROJECT}.{DATASET}.briefs`
+            WHERE brief_id = @brief_id
+            ORDER BY updated_at DESC LIMIT 1
+            """,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id)
+                ]
+            ),
+        ).result()
     )
+    return dict(rows[0]) if rows else None
+
+
+def get_deck_outline(brief_id: str) -> dict:
+    """List what's currently on each slide of a deck, with its index.
+
+    update_deck addresses slides by index, and nobody should have to know
+    the index of "the closing slide" — read the outline instead of asking.
+
+    Args:
+        brief_id: which brief's deck to describe, from build_solution_deck
+            or lookup_deck.
+
+    Returns:
+        Each slide's 0-based index, layout and headline text, or an error if
+        no stored deck exists for that brief.
+    """
+    stored = _load_brief(brief_id)
+    if not stored or not stored.get("deck_json"):
+        return {"error": f"No stored deck found for brief_id {brief_id}."}
+    try:
+        deck = json.loads(stored["deck_json"])
+    except json.JSONDecodeError as exc:
+        return {"error": f"The stored deck could not be read: {exc}"}
+    return {
+        "brief_id": brief_id,
+        "link": stored.get("deck_link"),
+        "slides": [
+            {
+                "slide_index": i,
+                "layout": s.get("layout"),
+                "heading": s.get("heading") or s.get("quote") or "",
+                "fields": sorted(k for k in s if k != "layout"),
+            }
+            for i, s in enumerate(deck.get("slides") or [])
+        ],
+    }
 
 
 def lookup_deck(client_name: str) -> dict:
     """Find the most recent deck built for a client, so it can be edited.
+
+    A conversation doesn't remember decks built in an earlier session, and
+    the email flow builds decks outside any conversation at all — this is
+    how an existing deck gets found again instead of duplicated.
 
     Args:
         client_name: the client name to search for — matches the value
             passed to build_solution_deck, not a free-text query.
 
     Returns:
-        The most recent matching deck's id and link, or a not-found status
-        if nothing matches — the agent should say so rather than guess.
+        The most recent matching deck's brief_id, file id and link, or a
+        not-found status the agent should report rather than guess past.
     """
-    client = bigquery.Client(project=PROJECT)
-    query = f"""
-        SELECT deck_file_id, deck_link
-        FROM `{PROJECT}.{DATASET}.briefs`
-        WHERE LOWER(client_name) = LOWER(@client_name)
-        ORDER BY created_at DESC
-        LIMIT 1
-    """
-    job = client.query(
-        query,
-        job_config=bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("client_name", "STRING", client_name)
-            ]
-        ),
+    rows = list(
+        bigquery.Client(project=PROJECT).query(
+            f"""
+            SELECT brief_id, deck_file_id, deck_link, deck_json IS NOT NULL AS has_deck_json
+            FROM `{PROJECT}.{DATASET}.briefs`
+            WHERE LOWER(client_name) = LOWER(@client_name) AND deck_file_id IS NOT NULL
+            ORDER BY updated_at DESC LIMIT 1
+            """,
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("client_name", "STRING", client_name)
+                ]
+            ),
+        ).result()
     )
-    rows = list(job.result())
     if not rows:
         return {"found": False}
-    return {"found": True, "deck_id": rows[0]["deck_file_id"], "link": rows[0]["deck_link"]}
-
-
-def update_deck(deck_id: str, find_text: str, replace_text: str) -> dict:
-    """Edit an existing deck in place — never creates a new one.
-
-    Args:
-        deck_id: from a prior build_solution_deck or lookup_deck call. Never
-            invented — the agent must have it from one of those two tools.
-        find_text: exact text already on the deck to replace.
-        replace_text: what to put there instead.
-
-    Returns:
-        Confirmation and the deck's link.
-    """
-    creds = get_credentials()
-    slides = build("slides", "v1", credentials=creds)
-    slides.presentations().batchUpdate(
-        presentationId=deck_id,
-        body={
-            "requests": [
-                {
-                    "replaceAllText": {
-                        "containsText": {"text": find_text},
-                        "replaceText": replace_text,
-                    }
-                }
-            ]
-        },
-    ).execute()
+    row = rows[0]
     return {
-        "updated": True,
-        "link": f"https://docs.google.com/presentation/d/{deck_id}/edit",
+        "found": True,
+        "brief_id": row["brief_id"],
+        "deck_id": row["deck_file_id"],
+        "link": row["deck_link"],
+        "editable": bool(row["has_deck_json"]),
     }

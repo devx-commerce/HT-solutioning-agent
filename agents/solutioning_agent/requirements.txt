@@ -2,5 +2,7 @@ google-cloud-aiplatform[adk,agent_engines]
 google-api-python-client
 google-cloud-bigquery
 google-cloud-secret-manager
+google-genai
 google-auth
 python-dotenv
+google-cloud-discoveryengine
