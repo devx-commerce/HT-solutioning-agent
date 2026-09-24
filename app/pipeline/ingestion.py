@@ -30,6 +30,7 @@ Two testing knobs on the classify-and-enqueue half, both off by default:
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 from . import agent_client
@@ -228,6 +229,11 @@ def _enqueue(
     )
 
 
+def _deck_link(reply: str) -> str | None:
+    match = re.search(r"https://docs\.google\.com/presentation/d/[\w-]+", reply)
+    return match.group(0) if match else None
+
+
 def execute_build(payload: dict) -> str:
     """The /work side: one Pub/Sub message, one Agent Engine invocation.
 
@@ -262,7 +268,11 @@ def execute_build(payload: dict) -> str:
         reply = agent_client.invoke_agent(
             f"An email thread came in. Subject: {subject}\n\n"
             f"Full thread so far:\n{thread_context}\n\n"
-            "Build a placeholder solution deck for whoever this is from.",
+            f"The brief_id for this request is {thread_id} — pass it to every "
+            "research tool so the retrieval is recorded against this brief.\n\n"
+            "Research what you need to, then build a solution deck grounded in "
+            "what you actually found. Report the evidence with its sources and "
+            "say plainly what you could not establish.",
             session_user_id=f"ingestion-{thread_id}",
         )
         if "docs.google.com/presentation" not in reply:
@@ -274,7 +284,13 @@ def execute_build(payload: dict) -> str:
             return "failed"
 
     labels.apply_label(gmail, message_id, labels.DECK_GENERATED_LABEL)
-    notifications.send_deck_notification(payload["client_name"], payload["brief"])
+    notifications.send_deck_notification(
+        payload["client_name"],
+        payload["brief"],
+        deck_link=_deck_link(reply),
+        evidence=reply,
+        retrievals=storage.retrieval_summary(thread_id),
+    )
     sheet.append_row(
         client_name=payload["client_name"],
         brief=payload["brief"],

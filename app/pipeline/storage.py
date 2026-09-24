@@ -189,6 +189,32 @@ def mark_thread_sheet_written(thread_id: str) -> None:
     _update_thread(thread_id, sheet_row_written=True)
 
 
+def retrieval_summary(brief_id: str) -> list[dict]:
+    """What each research source actually returned for this brief.
+
+    Read back from the telemetry the research tools wrote, not from the
+    agent's own account of itself — the SOW requires every draft to state
+    which sources returned results and which didn't, and a model
+    summarising its own tool calls can get that wrong.
+    """
+    rows = _client().query(
+        f"""
+        SELECT actor AS source, outcome,
+               ANY_VALUE(detail) AS detail, COUNT(*) AS calls
+        FROM `{PROJECT}.{DATASET}.audit_log`
+        WHERE brief_id = @brief_id AND event_type = 'retrieval'
+        GROUP BY source, outcome
+        ORDER BY source
+        """,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id)
+            ]
+        ),
+    ).result()
+    return [dict(r) for r in rows]
+
+
 def mark_thread_failed(thread_id: str, detail: str) -> None:
     _update_thread(thread_id, status="failed")
     record_decision(thread_id, "build_failed", detail)
