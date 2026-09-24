@@ -1,54 +1,75 @@
-"""The Cloud Run service: Gmail onboarding, sweep, and flow 1's handler.
+"""The two Cloud Run services this same source deploys as.
 
-Two identity models live side by side on purpose:
+One codebase, two deployments, split by what must be public vs. what must
+not be — not by IAM configuration on a single shared surface:
+
+  solutioning-agent            --no-allow-unauthenticated (native Cloud Run
+                                IAM). Hosts /sweep, /work, /status,
+                                /handle_message. Called by Cloud Scheduler,
+                                Pub/Sub, and you (via your own gcloud
+                                identity) — never by an anonymous request.
+
+  solutioning-agent-onboarding --allow-unauthenticated, PUBLIC_ROUTES_ONLY=true.
+                                Hosts only /healthz and /oauth/gmail/*. A
+                                browser and Google's own redirect can't
+                                present a Cloud Run invoker identity, so
+                                these two routes have no choice but to be
+                                public — deliberately isolated onto a
+                                service that exposes nothing else, so a bug
+                                here can't reach anything sensitive.
+
+PUBLIC_ROUTES_ONLY controls which routes actually get registered — on the
+onboarding deployment, /sweep etc. don't just go unprotected, they don't
+exist at all (a request to them 404s). This is the "no way to get it wrong"
+property that made us choose two services over one service with an in-code
+auth check: see docs/EMAIL-POLLER-DESIGN.md for the reasoning.
+
+Two identity models still live side by side underneath both:
   - Drive/Slides: one shared identity (oauth_creds.py), bootstrapped once.
-  - Gmail: per-account-manager, self-onboarded via /oauth/gmail/*, because
-    that's the one thing that has to be per-person once there's more than
-    one mailbox.
+  - Gmail: per-account-manager, self-onboarded via /oauth/gmail/*.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
-from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google.cloud import bigquery
 
+import agent_client
 import gmail_oauth
+import ingestion
+import mail_utils
 from gmail_client import active_users, get_service_for_user, mark_reauthorization_required
 from notifications import send_reauth_prompt
 
 app = FastAPI()
-log = logging.getLogger("pitch_agent_skeleton")
+log = logging.getLogger("solutioning_agent")
 
 PROJECT = os.environ["GOOGLE_CLOUD_PROJECT"]
-LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
-DATASET = os.environ.get("BQ_DATASET", "pitch_agent_skeleton")
-AGENT_ENGINE_RESOURCE = os.environ.get("AGENT_ENGINE_RESOURCE", "")
-
-_BASE_QUERY = "is:unread in:inbox -category:promotions -category:social -in:chats"
+DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
+PUBLIC_ROUTES_ONLY = os.environ.get("PUBLIC_ROUTES_ONLY", "false").lower() == "true"
 
 
-@app.get("/healthz")
 def healthz() -> dict:
     return {"ok": True}
 
 
-# --- Gmail onboarding ------------------------------------------------------
+# --- Gmail onboarding — public on both deployments, meaningful on neither
+# except the onboarding one, since only that one has a registered redirect
+# URI and a reachable SERVICE_URL matching it. ------------------------------
 
 
-@app.get("/oauth/gmail/start")
 def oauth_start() -> RedirectResponse:
     """Visit this URL to onboard your own mailbox. No script, no admin grant."""
     redirect_uri = f"{_self_url()}/oauth/gmail/callback"
     return RedirectResponse(gmail_oauth.build_auth_url(redirect_uri))
 
 
-@app.get("/oauth/gmail/callback")
 def oauth_callback(code: str, state: str) -> HTMLResponse:
     try:
         result = gmail_oauth.handle_callback(code, state)
@@ -58,13 +79,15 @@ def oauth_callback(code: str, state: str) -> HTMLResponse:
 
 
 def _self_url() -> str:
-    # Set to the Cloud Run service's own URL post-deploy (README step 6b) —
-    # it must exactly match a redirect URI registered on the OAuth client,
-    # or Google rejects the callback before your code ever runs.
+    # Set to *this* deployment's own URL post-deploy — must exactly match a
+    # redirect URI registered on the OAuth client, or Google rejects the
+    # callback before your code ever runs.
     return os.environ.get("SERVICE_URL", "http://localhost:8080")
 
 
-@app.get("/status")
+# --- everything below is private-service-only -------------------------------
+
+
 def status() -> dict:
     """Who's onboarded, and whose token needs attention.
 
@@ -87,24 +110,41 @@ def status() -> dict:
     }
 
 
-# --- background watcher ----------------------------------------------------
+def sweep(force: bool = False, dry_run: bool = False) -> dict:
+    """Run the ingestion pipeline against every onboarded mailbox.
 
+    See docs/EMAIL-POLLER-DESIGN.md and ingestion.py for the actual logic —
+    watermark-bounded classification (Branch A) plus the always-included
+    manual-label override (Branch B). A stale/revoked token degrades that
+    one user's row (mark_reauthorization_required) rather than failing the
+    whole sweep — same posture as the real project's per-source envelope
+    degradation.
 
-@app.post("/sweep")
-def sweep() -> dict:
-    """Check every onboarded mailbox for messages matching the tier-1 filter.
+    Two testing flags, both off by default and meant to be used from a
+    terminal, not by Cloud Scheduler:
 
-    A stale/revoked token degrades that one user's row (mark_reauthorization_
-    required) rather than failing the whole sweep — same posture as the real
-    project's per-source envelope degradation.
+      POST /sweep?force=true    reprocess every candidate as if seen for
+                                 the first time — ignores the watermark and
+                                 prior decisions. Never touches the real
+                                 watermark. Expect duplicate rows on a
+                                 mailbox already swept normally.
+      POST /sweep?dry_run=true  skip the actual Agent Engine call, verify
+                                 everything else (classification, labels,
+                                 the sheet row) without a deployed agent.
+
+    Combine as POST /sweep?force=true&dry_run=true to replay the same test
+    inbox repeatedly while iterating on the classifier or the sheet output.
     """
     results = []
     for user in active_users():
         try:
             gmail = get_service_for_user(user["gmail_secret"])
-            resp = gmail.users().messages().list(userId="me", q=_BASE_QUERY).execute()
-            ids = [m["id"] for m in resp.get("messages", [])]
-            results.append({"email": user["email"], "message_ids": ids})
+            results.append(
+                ingestion.run_sweep_for_user(
+                    user["email"], gmail, user["gmail_secret"],
+                    force=force, dry_run=dry_run,
+                )
+            )
         except Exception as exc:
             log.warning("sweep.user_failed", extra={"email": user["email"], "error": str(exc)})
             mark_reauthorization_required(user["email"])
@@ -122,91 +162,58 @@ def sweep() -> dict:
     return {"users_checked": len(results), "results": results}
 
 
-@app.post("/work")
-def work() -> dict:
-    """Write one dummy brief row. Proves: Cloud Run runtime identity -> BigQuery."""
-    client = bigquery.Client(project=PROJECT)
-    table = f"{PROJECT}.{DATASET}.briefs"
-    now = datetime.now(timezone.utc).isoformat()
-    row = {
-        "brief_id": f"hollow-{now}",
-        "message_id": None,
-        "client_name": "skeleton-test",
-        "status": "hollow",
-        "attempts": 0,
-        "detail": "written by /work with no real classification behind it",
-        "deck_file_id": None,
-        "deck_link": None,
-        "created_at": now,
-        "updated_at": now,
-    }
-    errors = client.insert_rows_json(table, [row])
-    if errors:
-        log.error("work.bigquery_write_failed", extra={"errors": errors})
-        return {"ok": False, "errors": errors}
-    return {"ok": True, "row": row}
+def work(envelope: dict) -> dict:
+    """Pub/Sub push target — one build task, one Agent Engine invocation.
 
-
-def _extract_body(gmail, message_id: str) -> tuple[str, str]:
-    """Subject and plain-text body of one message — no further parsing here."""
-    msg = gmail.users().messages().get(userId="me", id=message_id, format="full").execute()
-    headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
-    subject = headers.get("Subject", "")
-
-    def _walk(part) -> str:
-        if part.get("mimeType") == "text/plain" and "data" in part.get("body", {}):
-            return base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", "replace")
-        for sub in part.get("parts", []) or []:
-            found = _walk(sub)
-            if found:
-                return found
-        return ""
-
-    return subject, _walk(msg["payload"])
-
-
-def _invoke_agent(text: str) -> str:
-    """Call the deployed Agent Engine resource directly — not through GE.
-
-    Verify against your installed google-cloud-aiplatform's actual
-    `vertexai.agent_engines` signature before assuming a failure here is a
-    permissions problem — this API surface has moved across versions.
+    Cloud Run's own --max-instances / --concurrency on this service is what
+    actually bounds how many of these run at once — Pub/Sub delivers, it
+    doesn't limit concurrency by itself. See pubsub.py.
     """
-    import vertexai
-    from vertexai import agent_engines
+    data = envelope.get("message", {}).get("data", "")
+    if not data:
+        return {"ok": False, "reason": "no Pub/Sub message data in envelope"}
 
-    vertexai.init(project=PROJECT, location=LOCATION)
-    engine = agent_engines.get(AGENT_ENGINE_RESOURCE)
-    session = engine.create_session(user_id="skeleton-flow1")
-    reply_text = ""
-    for event in engine.stream_query(
-        user_id="skeleton-flow1", session_id=session["id"], message=text
-    ):
-        reply_text += str(event)
-    return reply_text
+    payload = json.loads(base64.b64decode(data).decode("utf-8"))
+    outcome = ingestion.execute_build(payload)
+    return {"ok": outcome == "built", "outcome": outcome, "thread_id": payload.get("thread_id")}
 
 
-@app.post("/handle_message/{email}/{message_id}")
 def handle_message(email: str, message_id: str) -> dict:
-    """Flow 1, end to end, for one onboarded mailbox and one message.
+    """Flow 1, manual entry point: one onboarded mailbox, one message, by hand.
 
-    Not wired to /sweep automatically — call /sweep, pick an (email,
-    message_id) pair from its response, call this by hand. That join is
-    Pub/Sub's job once this path is proven.
+    Superseded for normal operation by /sweep's ingestion pipeline — this
+    stays as a direct way to test the agent-invocation path against one
+    specific message without going through classification at all.
     """
     user_row = next((u for u in active_users() if u["email"] == email), None)
     if user_row is None:
         return {"ok": False, "reason": f"{email} is not onboarded — visit /oauth/gmail/start"}
 
     gmail = get_service_for_user(user_row["gmail_secret"])
-    subject, body = _extract_body(gmail, message_id)
-    if not body:
+    msg = mail_utils.fetch_message(gmail, message_id)
+    if not msg.body:
         return {"ok": False, "reason": "no plain-text body found"}
 
-    reply = _invoke_agent(
-        f"An email came in. Subject: {subject}\n\nBody:\n{body}\n\n"
-        "Build a placeholder pitch deck for whoever this is from."
+    reply = agent_client.invoke_agent(
+        f"An email came in. Subject: {msg.subject}\n\nBody:\n{msg.body}\n\n"
+        "Build a placeholder solution deck for whoever this is from."
     )
 
     log.info("handle_message.done", extra={"email": email, "message_id": message_id})
     return {"ok": True, "agent_reply": reply}
+
+
+# --- route registration ------------------------------------------------------
+# Always present, on both deployments:
+app.add_api_route("/healthz", healthz, methods=["GET"])
+app.add_api_route("/oauth/gmail/start", oauth_start, methods=["GET"])
+app.add_api_route("/oauth/gmail/callback", oauth_callback, methods=["GET"])
+
+# Only on the private deployment. On the onboarding deployment
+# (PUBLIC_ROUTES_ONLY=true) these simply don't exist — a request to them
+# 404s, rather than being merely unprotected.
+if not PUBLIC_ROUTES_ONLY:
+    app.add_api_route("/status", status, methods=["GET"])
+    app.add_api_route("/sweep", sweep, methods=["POST"])
+    app.add_api_route("/work", work, methods=["POST"])
+    app.add_api_route("/handle_message/{email}/{message_id}", handle_message, methods=["POST"])

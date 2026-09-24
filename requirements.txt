@@ -3,8 +3,15 @@ uvicorn[standard]
 requests
 google-cloud-bigquery
 google-cloud-secret-manager
+google-cloud-pubsub
 google-cloud-aiplatform[agent_engines]
+google-genai
 google-auth
 google-auth-oauthlib
 google-api-python-client
 google-adk
+python-dotenv
+# Only needed if a deploy passes --trace_to_cloud/--otel_to_cloud — without
+# it, the deployed container crashes on every startup attempt trying to
+# import opentelemetry.exporter.cloud_trace. Confirmed the hard way.
+opentelemetry-exporter-gcp-trace

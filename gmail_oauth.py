@@ -37,10 +37,15 @@ GMAIL_SCOPES = [
     "email",
     "profile",
     "https://www.googleapis.com/auth/gmail.readonly",
+    # Label management only — not gmail.modify, which would also grant
+    # content changes. The poller only ever applies/reads labels, never
+    # touches message content. Adding this after mailboxes were already
+    # onboarded under readonly-only requires those mailboxes to re-consent.
+    "https://www.googleapis.com/auth/gmail.labels",
 ]
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-DATASET = os.environ.get("BQ_DATASET", "pitch_agent_skeleton")
+DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 ALLOWED_DOMAIN = os.environ.get("ALLOWED_ONBOARD_DOMAIN", "")
 STATE_SIGNING_KEY = os.environ.get("STATE_SIGNING_KEY", "")
 
@@ -59,7 +64,12 @@ def _sign_state(redirect_uri: str) -> str:
 
 
 def _verify_state(state: str) -> str:
-    ts, redirect_uri, sig = state.rsplit(".", 2)
+    # ts is always plain digits (no dots), so the first "." is a safe left
+    # boundary. sig is a fixed-length hex digest (no dots), so the last "."
+    # in the whole string is always the true boundary before it — even
+    # though redirect_uri itself contains dots (e.g. "...run.app/...").
+    ts, rest = state.split(".", 1)
+    redirect_uri, sig = rest.rsplit(".", 1)
     expected = hmac.new(
         STATE_SIGNING_KEY.encode(), f"{ts}.{redirect_uri}".encode(), hashlib.sha256
     ).hexdigest()
@@ -79,7 +89,11 @@ def build_auth_url(redirect_uri: str) -> str:
         "response_type": "code",
         "scope": " ".join(GMAIL_SCOPES),
         "access_type": "offline",
-        "prompt": "consent",
+        # select_account forces a chooser instead of silently reusing
+        # whichever Google account is already active in the browser —
+        # otherwise an AM with a personal Gmail session open could end up
+        # authorizing the wrong account without ever seeing a picker.
+        "prompt": "select_account consent",
         "state": _sign_state(redirect_uri),
     }
     return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)

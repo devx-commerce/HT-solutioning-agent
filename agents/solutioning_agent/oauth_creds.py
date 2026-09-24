@@ -1,15 +1,15 @@
-"""The one shared identity — currently covering everything, deliberately.
+"""A deliberate duplicate of the repo-root oauth_creds.py — not a fork.
 
-gmail_oauth.py / gmail_client.py's self-serve per-AM onboarding flow exists
-for a scale we don't have yet: several people onboarding themselves without
-a developer doing it for them. Today there's exactly one mailbox
-(sales.agent@) and one person bootstrapping it — that's what
-scripts/get_refresh_token.py already does, locally, with no public endpoint
-needed. So for now this identity also holds the Gmail read scopes, and the
-`users` table gets seeded by hand pointing at this same secret rather than
-going through /oauth/gmail/start at all. When a second mailbox actually
-needs onboarding, that's the point to revisit whether the self-serve flow
-(already built, just unused) is worth it — not before.
+`adk deploy agent_engine` only bundles the agent's own directory; nothing
+outside `agents/solutioning_agent/` makes it into the deployed package, and
+there's no flag to include extra local packages (checked directly against
+`adk deploy agent_engine --help`). The repo-root copy stays where it is
+because Cloud Run's notifications.py and sheet.py need it there too — two
+different deployment targets, two different packaging scopes, one
+credential underneath both.
+
+If the scope list or the secret-reading logic ever changes, change it in
+both places. Nothing enforces that automatically today.
 """
 
 from __future__ import annotations
@@ -30,8 +30,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/presentations",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/spreadsheets",
-    # Added temporarily so this one identity can also cover Gmail reading
-    # for the single mailbox we have today — see module docstring.
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.labels",
 ]

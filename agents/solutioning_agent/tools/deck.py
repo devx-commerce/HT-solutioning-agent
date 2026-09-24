@@ -1,5 +1,13 @@
 """Three tools: create a deck, find one you already made, and edit it.
 
+Lives inside the agent's own package (not at the repo root, where an
+earlier version of this file sat) because `adk deploy agent_engine` only
+bundles the agent's own directory — nothing outside it makes it into the
+deployed package, and there's no CLI flag to include extra local packages
+(checked: `adk deploy agent_engine --help` has no such option). See
+agents/solutioning_agent/oauth_creds.py for the same reasoning applied to
+its own dependency.
+
 The find/edit pair exists for one reason — refinement across separate chat
 sessions. Inside a single GE conversation, the agent already remembers the
 deck it just built; open a new session tomorrow (or refine something the
@@ -15,13 +23,13 @@ import os
 from google.cloud import bigquery
 from googleapiclient.discovery import build
 
-from oauth_creds import get_credentials
+from ..oauth_creds import get_credentials
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-DATASET = os.environ.get("BQ_DATASET", "pitch_agent_skeleton")
+DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 
 
-def build_hello_deck(client_name: str, note: str) -> dict:
+def build_solution_deck(client_name: str, note: str) -> dict:
     """Copy the template deck and replace its two placeholder tokens.
 
     Args:
@@ -38,7 +46,7 @@ def build_hello_deck(client_name: str, note: str) -> dict:
 
     copy = drive.files().copy(
         fileId=template_file_id,
-        body={"name": f"Hello Deck — {client_name}"},
+        body={"name": f"Solution Deck — {client_name}"},
     ).execute()
     deck_id = copy["id"]
 
@@ -100,7 +108,7 @@ def lookup_deck(client_name: str) -> dict:
 
     Args:
         client_name: the client name to search for — matches the value
-            passed to build_hello_deck, not a free-text query.
+            passed to build_solution_deck, not a free-text query.
 
     Returns:
         The most recent matching deck's id and link, or a not-found status
@@ -132,7 +140,7 @@ def update_deck(deck_id: str, find_text: str, replace_text: str) -> dict:
     """Edit an existing deck in place — never creates a new one.
 
     Args:
-        deck_id: from a prior build_hello_deck or lookup_deck call. Never
+        deck_id: from a prior build_solution_deck or lookup_deck call. Never
             invented — the agent must have it from one of those two tools.
         find_text: exact text already on the deck to replace.
         replace_text: what to put there instead.

@@ -1,0 +1,173 @@
+"""BigQuery-backed state for the ingestion sweep.
+
+Three concerns, three tables: the watermark (sweep_state), message-level
+idempotency and audit (decisions), thread-level intake tracking
+(ingestion_threads — deliberately separate from whatever the agent's own
+tools record in `briefs` about a built deck). See
+docs/EMAIL-POLLER-DESIGN.md for why BigQuery, including the honest tradeoff
+against a point-lookup-shaped store like Firestore.
+"""
+
+from __future__ import annotations
+
+import os
+from datetime import datetime, timedelta, timezone
+
+from google.cloud import bigquery
+
+PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
+
+BOOTSTRAP_LOOKBACK = timedelta(hours=24)
+WATERMARK_OVERLAP = timedelta(minutes=5)
+
+
+def _client() -> bigquery.Client:
+    return bigquery.Client(project=PROJECT)
+
+
+# --- watermark --------------------------------------------------------------
+
+
+def bootstrap_cutoff() -> datetime:
+    """The 'as if this were the first run' cutoff — also what force=True
+    uses, deliberately, so a test sweep never depends on the real
+    watermark's history."""
+    return datetime.now(timezone.utc) - BOOTSTRAP_LOOKBACK
+
+
+def get_sweep_cutoff() -> datetime:
+    """The Branch A `after:` cutoff — last successful sweep, minus overlap,
+    or a 24h bootstrap default on the very first run."""
+    rows = list(
+        _client()
+        .query(
+            f"SELECT last_swept_at FROM `{PROJECT}.{DATASET}.sweep_state` "
+            f"WHERE id = 'default'"
+        )
+        .result()
+    )
+    if not rows or rows[0]["last_swept_at"] is None:
+        return bootstrap_cutoff()
+    return rows[0]["last_swept_at"] - WATERMARK_OVERLAP
+
+
+def set_sweep_watermark(swept_at: datetime) -> None:
+    _client().query(
+        f"""
+        MERGE `{PROJECT}.{DATASET}.sweep_state` T
+        USING (SELECT 'default' AS id) S ON T.id = S.id
+        WHEN MATCHED THEN UPDATE SET last_swept_at = @swept_at
+        WHEN NOT MATCHED THEN INSERT (id, last_swept_at) VALUES ('default', @swept_at)
+        """,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("swept_at", "TIMESTAMP", swept_at.isoformat())
+            ]
+        ),
+    ).result()
+
+
+# --- message-level idempotency + audit --------------------------------------
+
+
+def decision_exists(message_id: str) -> bool:
+    rows = list(
+        _client()
+        .query(
+            f"SELECT 1 FROM `{PROJECT}.{DATASET}.decisions` WHERE message_id = @mid LIMIT 1",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("mid", "STRING", message_id)]
+            ),
+        )
+        .result()
+    )
+    return len(rows) > 0
+
+
+def record_decision(
+    message_id: str,
+    decision: str,
+    reason: str,
+    confidence: float | None = None,
+    brief_id: str | None = None,
+) -> None:
+    _client().insert_rows_json(
+        f"{PROJECT}.{DATASET}.decisions",
+        [
+            {
+                "message_id": message_id,
+                "brief_id": brief_id,
+                "decision": decision,
+                "reason": reason,
+                "confidence": confidence,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+    )
+
+
+# --- thread-level intake tracking -------------------------------------------
+
+
+def thread_status(thread_id: str) -> dict | None:
+    rows = list(
+        _client()
+        .query(
+            f"SELECT status, sheet_row_written, brief_id FROM "
+            f"`{PROJECT}.{DATASET}.ingestion_threads` WHERE thread_id = @tid LIMIT 1",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("tid", "STRING", thread_id)]
+            ),
+        )
+        .result()
+    )
+    return dict(rows[0]) if rows else None
+
+
+def open_thread(thread_id: str, triggered_by: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    _client().insert_rows_json(
+        f"{PROJECT}.{DATASET}.ingestion_threads",
+        [
+            {
+                "thread_id": thread_id,
+                "status": "building",
+                "triggered_by": triggered_by,
+                "sheet_row_written": False,
+                "brief_id": None,
+                "created_at": now,
+                "updated_at": now,
+            }
+        ],
+    )
+
+
+def _update_thread(thread_id: str, **fields) -> None:
+    fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    set_clause = ", ".join(f"{k} = @{k}" for k in fields)
+    params = [
+        bigquery.ScalarQueryParameter(
+            k, "BOOL" if isinstance(v, bool) else "STRING", v
+        )
+        for k, v in fields.items()
+    ]
+    params.append(bigquery.ScalarQueryParameter("tid", "STRING", thread_id))
+    _client().query(
+        f"UPDATE `{PROJECT}.{DATASET}.ingestion_threads` SET {set_clause} "
+        f"WHERE thread_id = @tid",
+        job_config=bigquery.QueryJobConfig(query_parameters=params),
+    ).result()
+
+
+def mark_thread_built(thread_id: str, brief_id: str) -> None:
+    _update_thread(thread_id, status="built", brief_id=brief_id)
+
+
+def mark_thread_sheet_written(thread_id: str) -> None:
+    _update_thread(thread_id, sheet_row_written=True)
+
+
+def mark_thread_failed(thread_id: str, detail: str) -> None:
+    _update_thread(thread_id, status="failed")
+    record_decision(thread_id, "build_failed", detail)

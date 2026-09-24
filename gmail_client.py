@@ -20,7 +20,7 @@ from googleapiclient.discovery import build
 from gmail_oauth import GMAIL_SCOPES
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-DATASET = os.environ.get("BQ_DATASET", "pitch_agent_skeleton")
+DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 
 
 @lru_cache(maxsize=1)
