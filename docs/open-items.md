@@ -94,12 +94,17 @@ being acted on right now.
 
 ## Ideas not yet designed
 
-- **Sender blacklist for ingestion.** Certain email addresses (e.g. HR,
-  internal-only senders) should never even reach classification — filtered
-  out at intake, before the Gemini call, not rejected by it. Needs: where
-  the blacklist lives (BigQuery table vs. a config list), whether it's
-  address-exact or domain-level, and who maintains it. Not designed yet,
-  just captured so it isn't lost.
+- **Sender blacklist for ingestion.** Certain senders (HR, IT service desk,
+  internal newsletters) should never reach classification — filtered at
+  intake, before the Gemini call. Worth knowing before building it:
+  classification already *rejects* these correctly (checked against the real
+  inbox on 2026-09-25 — HR's "IJP | Digital Sales Strategy", the IT/SFDC
+  thread and a marketing newsletter all classified as not-a-request), so
+  this is a cost and noise optimisation, not a correctness fix. The one
+  genuine correctness case — the agent reading its own notifications back —
+  is already handled in `ingestion._self_filter`. Still open: where the list
+  lives (BigQuery vs config), address-exact vs domain-level, who maintains
+  it.
 
 ## Log
 
