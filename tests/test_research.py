@@ -726,3 +726,47 @@ def test_search_past_decks_drops_results_outside_the_folder():
     assert titles == ["Fortis X HT Media"]
     assert "Sample of contract" not in titles
     assert log.call_args.kwargs["filtered_out"] == 1
+
+
+def test_past_decks_retries_once_on_a_transient_failure():
+    """A momentary network blip must not be reported as an unreachable corpus."""
+    from google.api_core import exceptions as api_exceptions
+
+    de = MagicMock()
+    client = de.SearchServiceClient.return_value
+    client.search.side_effect = [
+        api_exceptions.ServiceUnavailable("dns hiccup"),
+        [],  # second attempt succeeds
+    ]
+    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
+         patch.object(research, "_log_retrieval") as log, \
+         patch.object(research.time, "sleep"), \
+         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": de}):
+        result = research.search_past_decks("fortis", "b1")
+
+    assert client.search.call_count == 2
+    assert "error" not in result
+    assert log.call_args[0][2] == "no_results"
+
+
+def test_past_decks_gives_up_after_the_second_transient_failure():
+    from google.api_core import exceptions as api_exceptions
+
+    de = MagicMock()
+    de.SearchServiceClient.return_value.search.side_effect = \
+        api_exceptions.ServiceUnavailable("still down")
+    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
+         patch.object(research, "_log_retrieval") as log, \
+         patch.object(research.time, "sleep"), \
+         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": de}):
+        result = research.search_past_decks("fortis", "b1")
+
+    assert de.SearchServiceClient.return_value.search.call_count == 2
+    assert "error" in result
+    assert log.call_args[0][2] == "error"

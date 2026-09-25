@@ -252,23 +252,36 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         f"/dataStores/{PAST_DECKS_DATASTORE}/servingConfigs/default_search"
     )
     try:
+        from google.api_core import exceptions as api_exceptions
         from google.cloud import discoveryengine_v1 as discoveryengine
 
         # The store is ACL-enabled (Google Identity), so it rejects a service
         # account — search as the shared identity that owns the decks folder.
         client = discoveryengine.SearchServiceClient(credentials=get_credentials())
-        pager = client.search(
-            discoveryengine.SearchRequest(
-                serving_config=serving_config,
-                query=query,
-                page_size=8,
-                content_search_spec=discoveryengine.SearchRequest.ContentSearchSpec(
-                    snippet_spec=discoveryengine.SearchRequest.ContentSearchSpec.SnippetSpec(
-                        return_snippet=True
-                    )
-                ),
-            )
+        request = discoveryengine.SearchRequest(
+            serving_config=serving_config,
+            query=query,
+            page_size=8,
+            content_search_spec=discoveryengine.SearchRequest.ContentSearchSpec(
+                snippet_spec=discoveryengine.SearchRequest.ContentSearchSpec.SnippetSpec(
+                    return_snippet=True
+                )
+            ),
         )
+        # One retry on a transient failure. Observed twice in one session as a
+        # DNS timeout inside gRPC, recovering immediately — without this the
+        # agent reports the corpus unreachable, which reads as "no prior work
+        # exists" rather than "the network blinked".
+        for attempt in (1, 2):
+            try:
+                pager = client.search(request)
+                break
+            except (api_exceptions.ServiceUnavailable,
+                    api_exceptions.DeadlineExceeded,
+                    api_exceptions.RetryError):
+                if attempt == 2:
+                    raise
+                time.sleep(2)
     except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
         _log_retrieval(brief_id, "past_decks", "error", started, query=query,
                        error=str(exc)[:300])
