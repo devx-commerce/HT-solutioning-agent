@@ -198,8 +198,13 @@ error is fed back and it self-corrects.
    connector's identity has read access to the folder.
 2. **Vertex AI Grounding with Google Search** — confirm it's enabled on the
    project and check its per-query cost (runs on every research pass).
-3. **YouTube Data API v3** — enable, create a restricted key, store it in
-   Secret Manager, set the env var.
+3. ~~YouTube Data API v3~~ — **done.** Key restricted to
+   `youtube.googleapis.com` only, stored as Secret Manager secret
+   `solutioning-agent-youtube-key` (labelled `app=solutioning-agent`).
+   Cloud Run reads it via
+   `--set-secrets=YOUTUBE_API_KEY=solutioning-agent-youtube-key:latest`; the
+   Agent Engine package reads it from its bundled `.env`. Verified live
+   against Air India.
 4. **Apply the schema change to the live table** — `CREATE TABLE IF NOT
    EXISTS` doesn't add columns to an existing table; run `ALTER TABLE ...
    ADD COLUMN IF NOT EXISTS deck_json STRING, ADD COLUMN IF NOT EXISTS

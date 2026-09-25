@@ -54,6 +54,16 @@ being acted on right now.
   says this needs confirming with the client; not yet done. Blocks that
   integration whenever it's picked back up.
 
+## Committed in the SOW but not yet done
+
+- **Agree a data-loss-prevention policy with HT.** SOW §5.2 commits to
+  "Agree the security configuration applied to each agent, including data
+  loss prevention masking," and the Vertex AI Search data store has a
+  "sensitive data protection policy" field expecting
+  `projects/{project}/locations/{location}/contentPolicies/{policy}`. No
+  policy has been agreed, so the field is currently blank. Needs a decision
+  with HT about what to mask, then the policy created and attached.
+
 ## Housekeeping
 
 - **Label every resource that's ours with `app=solutioning-agent`.** This runs
