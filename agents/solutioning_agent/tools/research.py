@@ -18,9 +18,11 @@ Lives inside the agent's own package for the same reason tools/deck.py does:
 from __future__ import annotations
 
 import concurrent.futures
+import functools
 import html
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -30,11 +32,14 @@ from html.parser import HTMLParser
 
 from google.cloud import bigquery
 
+from ..oauth_creds import get_credentials
+
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
 PAST_DECKS_DATASTORE = os.environ.get("PAST_DECKS_DATASTORE", "")
+PAST_DECKS_FOLDER_ID = os.environ.get("PAST_DECKS_FOLDER_ID", "")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
 _USER_AGENT = "Mozilla/5.0 (compatible; HT-SolutioningAgent/1.0)"
@@ -169,6 +174,48 @@ def search_web(query: str, brief_id: str) -> dict:
     return {"findings": findings, "searches_run": searches}
 
 
+@functools.lru_cache(maxsize=1)
+def _past_deck_file_ids() -> frozenset[str]:
+    """Drive file ids in the past-decks folder, as an allow-list.
+
+    The Drive connector indexes everything the connecting identity can see —
+    it offers no folder scoping — and that identity can also see contract
+    samples and internal sheets. Those must never surface as "prior work" in
+    a client pitch, so results are filtered to this folder rather than
+    trusted to be decks.
+    """
+    from googleapiclient.discovery import build
+
+    drive = build("drive", "v3", credentials=get_credentials())
+    ids, page = set(), None
+    while True:
+        resp = drive.files().list(
+            q=f"'{PAST_DECKS_FOLDER_ID}' in parents and trashed=false",
+            fields="nextPageToken, files(id)", pageSize=200, pageToken=page,
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute()
+        ids.update(f["id"] for f in resp.get("files", []))
+        page = resp.get("nextPageToken")
+        if not page:
+            break
+    return frozenset(ids)
+
+
+_DRIVE_ID_RE = re.compile(r"[-\w]{25,}")
+
+
+def _in_past_decks_folder(allowed: frozenset[str], *candidates: str) -> bool:
+    """True only if some candidate string carries an allowed Drive file id.
+
+    Fails closed: an unrecognisable result is dropped rather than shown.
+    """
+    for text in candidates:
+        for token in _DRIVE_ID_RE.findall(text or ""):
+            if token in allowed:
+                return True
+    return False
+
+
 def search_past_decks(query: str, brief_id: str) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 
@@ -182,9 +229,18 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         an empty list with a reason when the corpus isn't reachable.
     """
     started = time.time()
-    if not PAST_DECKS_DATASTORE:
+    missing = [
+        name for name, value in (
+            ("PAST_DECKS_DATASTORE", PAST_DECKS_DATASTORE),
+            # Required, not optional: without the folder allow-list every
+            # result is filtered out, and a silent empty answer reads as
+            # "no prior work exists" when it means "misconfigured".
+            ("PAST_DECKS_FOLDER_ID", PAST_DECKS_FOLDER_ID),
+        ) if not value
+    ]
+    if missing:
         _log_retrieval(brief_id, "past_decks", "error", started, query=query,
-                       error="PAST_DECKS_DATASTORE not configured")
+                       error=f"not configured: {', '.join(missing)}")
         return {
             "results": [],
             "error": "The past-decks corpus is not connected yet — say so rather "
@@ -198,7 +254,9 @@ def search_past_decks(query: str, brief_id: str) -> dict:
     try:
         from google.cloud import discoveryengine_v1 as discoveryengine
 
-        client = discoveryengine.SearchServiceClient()
+        # The store is ACL-enabled (Google Identity), so it rejects a service
+        # account — search as the shared identity that owns the decks folder.
+        client = discoveryengine.SearchServiceClient(credentials=get_credentials())
         pager = client.search(
             discoveryengine.SearchRequest(
                 serving_config=serving_config,
@@ -216,12 +274,17 @@ def search_past_decks(query: str, brief_id: str) -> dict:
                        error=str(exc)[:300])
         return {"results": [], "error": str(exc)[:300]}
 
-    results = []
+    allowed = _past_deck_file_ids() if PAST_DECKS_FOLDER_ID else frozenset()
+    results, filtered_out = [], 0
     for hit in pager:
         doc = getattr(hit, "document", None)
         if doc is None:
             continue
         data = dict(getattr(doc, "derived_struct_data", {}) or {})
+        link = data.get("link", "")
+        if not _in_past_decks_folder(allowed, link, getattr(doc, "id", "") or ""):
+            filtered_out += 1
+            continue
         snippets = [
             s.get("snippet", "")
             for s in data.get("snippets", [])
@@ -230,7 +293,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         results.append(
             {
                 "title": data.get("title") or getattr(doc, "id", ""),
-                "link": data.get("link", ""),
+                "link": link,
                 "snippet": " ".join(snippets)[:800],
             }
         )
@@ -242,6 +305,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         started,
         query=query,
         result_count=len(results),
+        filtered_out=filtered_out,
     )
     return {"results": results}
 

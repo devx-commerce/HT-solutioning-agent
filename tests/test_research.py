@@ -417,6 +417,9 @@ def test_past_decks_unconfigured_is_an_explicit_error_and_is_logged():
 def test_past_decks_returns_title_link_and_snippet():
     hit = _deck_hit(snippets=("first bit", "second bit"))
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine([hit]):
         result = research.search_past_decks("acme", "brief-1")
@@ -429,6 +432,9 @@ def test_past_decks_returns_title_link_and_snippet():
 
 def test_past_decks_skips_hits_without_a_document():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval"), \
          _fake_discoveryengine([_deck_hit(doc=False), _deck_hit()]):
         result = research.search_past_decks("acme", "b")
@@ -440,6 +446,9 @@ def test_past_decks_falls_back_to_document_id_when_untitled():
     hit = _deck_hit()
     hit.document.derived_struct_data = {"link": "https://drive/x", "snippets": []}
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval"), \
          _fake_discoveryengine([hit]):
         result = research.search_past_decks("acme", "b")
@@ -449,6 +458,9 @@ def test_past_decks_falls_back_to_document_id_when_untitled():
 
 def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine([]):
         result = research.search_past_decks("acme", "brief-1")
@@ -460,6 +472,9 @@ def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
 
 def test_past_decks_search_failure_is_reported_and_logged():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine(error=RuntimeError("permission denied")):
         result = research.search_past_decks("acme", "brief-1")
@@ -654,3 +669,55 @@ def test_youtube_titles_are_html_unescaped():
     video = result["results"][0]
     assert video["title"] == "There's an Air about India & more"
     assert video["channel"] == 'Air India "Official"'
+
+
+# --- past decks must never surface anything outside that folder ------------
+# The Drive connector has no folder scoping, and the identity it indexes as
+# can also see contract samples and internal sheets. Those appearing as
+# "prior HT work" in a client pitch is the failure this guards against.
+
+
+ALLOWED = frozenset({"1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456"})
+
+
+@pytest.mark.parametrize("link,doc_id,expected", [
+    ("https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456/view", "", True),
+    ("", "1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456", True),
+    ("https://docs.google.com/document/d/1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ/edit", "", False),
+    ("", "", False),
+    ("https://x/abc", "", False),
+])
+def test_only_files_in_the_decks_folder_pass_the_filter(link, doc_id, expected):
+    assert research._in_past_decks_folder(ALLOWED, link, doc_id) is expected
+
+
+def test_search_past_decks_drops_results_outside_the_folder():
+    hit_ok = MagicMock()
+    hit_ok.document.id = "d1"
+    hit_ok.document.derived_struct_data = {
+        "title": "Fortis X HT Media",
+        "link": "https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456/view",
+        "snippets": [{"snippet": "prior campaign"}],
+    }
+    hit_bad = MagicMock()
+    hit_bad.document.id = "d2"
+    hit_bad.document.derived_struct_data = {
+        "title": "Sample of contract",
+        "link": "https://docs.google.com/document/d/1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ/edit",
+        "snippets": [{"snippet": "indemnity clause"}],
+    }
+
+    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=ALLOWED), \
+         patch.object(research, "get_credentials", return_value=None), \
+         patch.object(research, "_log_retrieval") as log, \
+         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": MagicMock()}):
+        from google.cloud import discoveryengine_v1 as de
+        de.SearchServiceClient.return_value.search.return_value = [hit_ok, hit_bad]
+        result = research.search_past_decks("fortis", "b1")
+
+    titles = [r["title"] for r in result["results"]]
+    assert titles == ["Fortis X HT Media"]
+    assert "Sample of contract" not in titles
+    assert log.call_args.kwargs["filtered_out"] == 1

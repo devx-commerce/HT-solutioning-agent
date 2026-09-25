@@ -32,6 +32,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.labels",
+    # Required to search the past-decks data store — see the same note in
+    # app/auth/oauth_creds.py. Kept in step with that file, which this one
+    # deliberately duplicates because adk deploy bundles only this directory.
+    "https://www.googleapis.com/auth/cloud-platform",
 ]
 
 
