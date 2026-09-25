@@ -38,7 +38,11 @@ PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
-PAST_DECKS_DATASTORE = os.environ.get("PAST_DECKS_DATASTORE", "")
+# Searched through the Gemini Enterprise app, not the data store directly:
+# the Drive connector runs in FEDERATED mode, querying Drive live rather than
+# building an index, and that path is served by the app's serving config.
+PAST_DECKS_ENGINE = os.environ.get("PAST_DECKS_ENGINE", "")
+PAST_DECKS_LOCATION = os.environ.get("PAST_DECKS_LOCATION", "us")
 PAST_DECKS_FOLDER_ID = os.environ.get("PAST_DECKS_FOLDER_ID", "")
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
@@ -231,7 +235,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
     started = time.time()
     missing = [
         name for name, value in (
-            ("PAST_DECKS_DATASTORE", PAST_DECKS_DATASTORE),
+            ("PAST_DECKS_ENGINE", PAST_DECKS_ENGINE),
             # Required, not optional: without the folder allow-list every
             # result is filtered out, and a silent empty answer reads as
             # "no prior work exists" when it means "misconfigured".
@@ -248,8 +252,9 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         }
 
     serving_config = (
-        f"projects/{PROJECT}/locations/global/collections/default_collection"
-        f"/dataStores/{PAST_DECKS_DATASTORE}/servingConfigs/default_search"
+        f"projects/{PROJECT}/locations/{PAST_DECKS_LOCATION}"
+        f"/collections/default_collection/engines/{PAST_DECKS_ENGINE}"
+        f"/servingConfigs/default_search"
     )
     try:
         from google.api_core import exceptions as api_exceptions
@@ -257,7 +262,14 @@ def search_past_decks(query: str, brief_id: str) -> dict:
 
         # The store is ACL-enabled (Google Identity), so it rejects a service
         # account — search as the shared identity that owns the decks folder.
-        client = discoveryengine.SearchServiceClient(credentials=get_credentials())
+        # A regional store is only reachable on its regional endpoint.
+        client_options = (
+            {"api_endpoint": f"{PAST_DECKS_LOCATION}-discoveryengine.googleapis.com"}
+            if PAST_DECKS_LOCATION != "global" else None
+        )
+        client = discoveryengine.SearchServiceClient(
+            credentials=get_credentials(), client_options=client_options
+        )
         request = discoveryengine.SearchRequest(
             serving_config=serving_config,
             query=query,

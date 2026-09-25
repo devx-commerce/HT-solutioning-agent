@@ -176,7 +176,7 @@ def test_log_retrieval_never_raises(attr):
 def test_bigquery_outage_does_not_break_research(call):
     """Telemetry is best-effort; a dead BigQuery must not surface to the agent."""
     with patch.object(research, "bigquery") as bq, \
-         patch.object(research, "PAST_DECKS_DATASTORE", ""), \
+         patch.object(research, "PAST_DECKS_ENGINE", ""), \
          patch.object(research, "YOUTUBE_API_KEY", ""):
         bq.Client.side_effect = RuntimeError("bq down")
         result = call()
@@ -404,7 +404,7 @@ def test_search_web_reports_errors_instead_of_raising_and_logs_them():
 
 
 def test_past_decks_unconfigured_is_an_explicit_error_and_is_logged():
-    with patch.object(research, "PAST_DECKS_DATASTORE", ""), \
+    with patch.object(research, "PAST_DECKS_ENGINE", ""), \
          patch.object(research, "_log_retrieval") as log:
         result = research.search_past_decks("acme", "brief-1")
 
@@ -416,7 +416,7 @@ def test_past_decks_unconfigured_is_an_explicit_error_and_is_logged():
 
 def test_past_decks_returns_title_link_and_snippet():
     hit = _deck_hit(snippets=("first bit", "second bit"))
-    with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -432,7 +432,7 @@ def test_past_decks_returns_title_link_and_snippet():
 
 
 def test_past_decks_skips_hits_without_a_document():
-    with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -447,7 +447,7 @@ def test_past_decks_skips_hits_without_a_document():
 def test_past_decks_falls_back_to_document_id_when_untitled():
     hit = _deck_hit()
     hit.document.derived_struct_data = {"link": "https://drive/x", "snippets": []}
-    with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -460,7 +460,7 @@ def test_past_decks_falls_back_to_document_id_when_untitled():
 
 
 def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
-    with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -475,7 +475,7 @@ def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
 
 
 def test_past_decks_search_failure_is_reported_and_logged():
-    with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -712,7 +712,7 @@ def test_search_past_decks_drops_results_outside_the_folder():
         "snippets": [{"snippet": "indemnity clause"}],
     }
 
-    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=ALLOWED), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -738,7 +738,7 @@ def test_past_decks_retries_once_on_a_transient_failure():
         api_exceptions.ServiceUnavailable("dns hiccup"),
         [],  # second attempt succeeds
     ]
-    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
@@ -758,7 +758,7 @@ def test_past_decks_gives_up_after_the_second_transient_failure():
     de = MagicMock()
     de.SearchServiceClient.return_value.search.side_effect = \
         api_exceptions.ServiceUnavailable("still down")
-    with patch.object(research, "PAST_DECKS_DATASTORE", "ds"), \
+    with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
          patch.object(research, "get_credentials", return_value=None), \
