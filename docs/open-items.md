@@ -54,6 +54,35 @@ being acted on right now.
   says this needs confirming with the client; not yet done. Blocks that
   integration whenever it's picked back up.
 
+## Blocking the past-decks corpus
+
+**Re-mint the shared OAuth token with `cloud-platform`, and add the scope in
+the same change.** Searching the past-decks data store needs it, and
+Discovery Engine offers no narrower scope. Two constraints make this
+fiddly:
+
+- The store is an ACL-enabled Workspace store, so it only accepts identities
+  inside `hindustantimes.com`. A service account, or any `@devxlabs.ai`
+  account, is refused with "User does not belong to the same organization".
+  It has to be `sales.agent@`.
+- Adding the scope to `SCOPES` *before* the token carries it makes every
+  refresh fail with `invalid_scope`, which breaks Drive, Slides, Sheets and
+  Gmail send — everything the shared identity does. Order matters.
+
+Do it in this order:
+
+1. Mint the token first, with a real path, logged in as `sales.agent@`:
+   `python scripts/get_refresh_token.py <real path>/client_secret.json`
+2. Pipe the actual printed JSON (not a placeholder) into a new version:
+   `gcloud secrets versions add solutioning-agent-oauth --data-file=-`
+3. Only then add `"https://www.googleapis.com/auth/cloud-platform"` to
+   `SCOPES` in **both** `app/auth/oauth_creds.py` and
+   `agents/solutioning_agent/oauth_creds.py`.
+
+Note `versions/latest` resolves to the highest-numbered version even when it
+is disabled, so a bad version cannot be fixed by disabling it — add a new
+version with the correct value instead.
+
 ## Committed in the SOW but not yet done
 
 - **Agree a data-loss-prevention policy with HT.** SOW §5.2 commits to
