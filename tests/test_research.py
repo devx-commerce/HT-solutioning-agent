@@ -625,3 +625,32 @@ def test_text_extractor_keeps_the_first_title_and_skips_noise():
     assert extractor.title == "First"
     assert "icon" not in extractor.parts
     assert "Real copy" in extractor.parts
+
+
+# --- youtube titles reach a client-facing deck, so they must be readable ----
+
+
+def test_youtube_titles_are_html_unescaped():
+    payload = {
+        "items": [
+            {
+                "id": {"videoId": "abc123"},
+                "snippet": {
+                    "title": "There&#39;s an Air about India &amp; more",
+                    "channelTitle": "Air India &quot;Official&quot;",
+                    "publishedAt": "2026-09-18T00:00:00Z",
+                },
+            }
+        ]
+    }
+    with patch.object(research, "YOUTUBE_API_KEY", "key"), \
+         patch.object(research, "_log_retrieval"), \
+         patch.object(research.urllib.request, "urlopen") as urlopen:
+        urlopen.return_value.__enter__.return_value.read.return_value = json.dumps(
+            payload
+        ).encode()
+        result = research.search_youtube("air india", "b1")
+
+    video = result["results"][0]
+    assert video["title"] == "There's an Air about India & more"
+    assert video["channel"] == 'Air India "Official"'

@@ -18,6 +18,7 @@ Lives inside the agent's own package for the same reason tools/deck.py does:
 from __future__ import annotations
 
 import concurrent.futures
+import html
 import json
 import os
 import time
@@ -292,8 +293,10 @@ def search_youtube(query: str, brief_id: str) -> dict:
             continue
         results.append(
             {
-                "title": snippet.get("title", ""),
-                "channel": snippet.get("channelTitle", ""),
+                # YouTube returns titles HTML-escaped; a deck slide reading
+                # "There&#39;s an Air about India" is not shippable.
+                "title": html.unescape(snippet.get("title", "")),
+                "channel": html.unescape(snippet.get("channelTitle", "")),
                 "published_at": snippet.get("publishedAt", ""),
                 "url": f"https://www.youtube.com/watch?v={video_id}",
             }
