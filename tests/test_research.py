@@ -419,6 +419,7 @@ def test_past_decks_returns_title_link_and_snippet():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine([hit]):
@@ -434,6 +435,7 @@ def test_past_decks_skips_hits_without_a_document():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval"), \
          _fake_discoveryengine([_deck_hit(doc=False), _deck_hit()]):
@@ -448,6 +450,7 @@ def test_past_decks_falls_back_to_document_id_when_untitled():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval"), \
          _fake_discoveryengine([hit]):
@@ -460,6 +463,7 @@ def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine([]):
@@ -474,6 +478,7 @@ def test_past_decks_search_failure_is_reported_and_logged():
     with patch.object(research, "PAST_DECKS_DATASTORE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_in_past_decks_folder", return_value=True), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine(error=RuntimeError("permission denied")):
