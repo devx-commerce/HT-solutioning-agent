@@ -34,11 +34,14 @@ SCOPES = [
     # for the single mailbox we have today — see module docstring.
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.labels",
+    # Searching the past-decks data store. It is an ACL-enabled Workspace
+    # store, so it only accepts a hindustantimes.com identity — a service
+    # account is refused with "User does not belong to the same organization"
+    # — and Discovery Engine offers no scope narrower than cloud-platform.
+    # This list must stay a subset of what the stored token was granted;
+    # requesting a scope it lacks fails every refresh with invalid_scope.
+    "https://www.googleapis.com/auth/cloud-platform",
 ]
-# Searching the past-decks data store additionally needs cloud-platform, but
-# adding it here before the stored token has been re-minted with that scope
-# makes every refresh fail with invalid_scope. Add it and re-mint together —
-# see docs/open-items.md.
 
 
 @lru_cache(maxsize=1)

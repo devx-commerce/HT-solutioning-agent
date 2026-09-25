@@ -31,6 +31,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.labels",
+    # Searching the past-decks data store. It is an ACL-enabled Workspace
+    # store, so it only accepts a hindustantimes.com identity — a service
+    # account is refused outright — and Discovery Engine offers no scope
+    # narrower than cloud-platform.
+    "https://www.googleapis.com/auth/cloud-platform",
 ]
 
 
