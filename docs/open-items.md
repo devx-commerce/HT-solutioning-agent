@@ -54,34 +54,47 @@ being acted on right now.
   says this needs confirming with the client; not yet done. Blocks that
   integration whenever it's picked back up.
 
-## Blocking the past-decks corpus
+## The past-decks search depends on a Gemini Enterprise seat
 
-**Re-mint the shared OAuth token with `cloud-platform`, and add the scope in
-the same change.** Searching the past-decks data store needs it, and
-Discovery Engine offers no narrower scope. Two constraints make this
-fiddly:
+`sales.agent@hindustantimes.com` must hold a Gemini Enterprise licence or
+every past-decks search fails with *"User must be assigned a license"*. This
+is not IAM and not a scope — it is a paid seat, and it is easy to lose:
 
-- The store is an ACL-enabled Workspace store, so it only accepts identities
-  inside `hindustantimes.com`. A service account, or any `@devxlabs.ai`
-  account, is refused with "User does not belong to the same organization".
-  It has to be `sales.agent@`.
-- Adding the scope to `SCOPES` *before* the token carries it makes every
-  refresh fail with `invalid_scope`, which breaks Drive, Slides, Sheets and
-  Gmail send — everything the shared identity does. Order matters.
+- The active subscription (`f61fcac8-67f3-47e6-8d9b-3ee74512aecc`, Gemini
+  Enterprise Plus) has **4 seats, all occupied**. The 50-seat
+  `free_trial_gemini` expired 6 Jan 2026.
+- The seat `sales.agent@` holds was freed by unassigning
+  `navya.agarwal@devxlabs.ai` on 2026-09-25. Nothing marks it as
+  infrastructure, so a routine cleanup could reclaim it and the agent would
+  start reporting "no prior HT work" with no obvious cause.
+- **The subscription renews 21 Oct 2026, mid-pilot** (SOW term ends 31 Oct).
+  Worth confirming seats survive the renewal.
+- SOW §5 describes up to 50 pilot users; 4 seats cannot cover that, so seat
+  count needs raising before any rollout beyond the demo.
 
-Do it in this order:
+Reassigning is self-serve — `roles/discoveryengine.admin` includes
+`discoveryengine.userStores.batchUpdateUserLicenses` — via Gemini Enterprise
+→ Manage users. Administration of data stores and apps does **not** need a
+licence (verified: an unlicensed identity can list data stores and get
+engines); only end-user `servingConfigs.search` does.
 
-1. Mint the token first, with a real path, logged in as `sales.agent@`:
-   `python scripts/get_refresh_token.py <real path>/client_secret.json`
-2. Pipe the actual printed JSON (not a placeholder) into a new version:
-   `gcloud secrets versions add solutioning-agent-oauth --data-file=-`
-3. Only then add `"https://www.googleapis.com/auth/cloud-platform"` to
-   `SCOPES` in **both** `app/auth/oauth_creds.py` and
-   `agents/solutioning_agent/oauth_creds.py`.
+## Credential facts worth not rediscovering
 
-Note `versions/latest` resolves to the highest-numbered version even when it
-is disabled, so a bad version cannot be fixed by disabling it — add a new
-version with the correct value instead.
+Three scope lists must agree, and `scripts/get_refresh_token.py` holds the
+one that matters: it decides what the token is *granted* at consent, while
+the two `oauth_creds.py` copies only decide what is *requested* on refresh.
+Add a scope to the script and re-mint first; adding it to `oauth_creds.py`
+before the token carries it fails every refresh with `invalid_scope`, which
+takes down Drive, Slides, Sheets and Gmail send together.
+
+Searching the Workspace store only works as a `hindustantimes.com` identity
+— a service account or any `@devxlabs.ai` account is refused with "User does
+not belong to the same organization" — and needs `cloud-platform`, which
+Discovery Engine offers no narrower alternative to.
+
+Secret Manager's `versions/latest` resolves to the highest-numbered version
+**even when that version is disabled**, so a bad version cannot be fixed by
+disabling it. Supersede it with a new version instead.
 
 ## Committed in the SOW but not yet done
 
