@@ -26,13 +26,21 @@ import pytest
 from agents.solutioning_agent.tools import deck as deck_tools
 
 
+# A minimal deck that satisfies the master deck (see test_master_deck.py for
+# the rules themselves), so these tests exercise publishing, not validation.
 DECK = {
     "type": "deck",
-    "meta": {"title": "T", "theme": "default-tech"},
+    "meta": {"title": "T", "theme": "ht-media"},
     "slides": [
         {"layout": "title", "heading": "First", "lead": "keep me"},
-        {"layout": "two-column", "heading": "Second", "body": "original body"},
-        {"layout": "closing", "heading": "Next Steps"},
+        {"layout": "two-column", "heading": "Second", "body": "original body", "aside": "keep"},
+        {"layout": "section", "heading": "Third"},
+        {"layout": "quote", "quote": "One idea"},
+        {"layout": "feature-grid", "columns": 2,
+         "cards": [{"title": "A"}, {"title": "B"}]},
+        {"layout": "two-column", "heading": "Next steps", "body": "Costing to follow.",
+         "aside": "Pricing team to follow up."},
+        {"layout": "closing", "heading": "Thank you"},
     ],
 }
 STORED = {
@@ -207,9 +215,9 @@ def test_stored_deck_is_the_normalized_one(patched):
     saved = {}
     with patch.object(deck_tools, "_save_brief",
                       side_effect=lambda bid, **kw: saved.update(kw)):
-        deck_tools.build_solution_deck(
-            '{"type":"deck","slides":[{"layout":"title","heading":"A\nB"}]}', "Acme", "b1"
-        )
+        # a literal newline inside a string value, as models emit
+        raw = json.dumps(DECK).replace('"First"', '"A\nB"')
+        deck_tools.build_solution_deck(raw, "Acme", "b1")
 
     # must be strictly parseable, or the next update_deck cannot read it back
     assert json.loads(saved["deck_json"])["slides"][0]["heading"] == "A\nB"
@@ -234,9 +242,9 @@ def test_outline_reports_index_layout_and_heading():
     with patch.object(deck_tools, "_load_brief", return_value=STORED):
         outline = deck_tools.get_deck_outline("b1")
 
-    assert [s["slide_index"] for s in outline["slides"]] == [0, 1, 2]
-    assert outline["slides"][2]["layout"] == "closing"
-    assert outline["slides"][2]["heading"] == "Next Steps"
+    assert [s["slide_index"] for s in outline["slides"]] == list(range(7))
+    assert outline["slides"][6]["layout"] == "closing"
+    assert outline["slides"][6]["heading"] == "Thank you"
     assert "heading" in outline["slides"][0]["fields"]
 
 

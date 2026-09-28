@@ -28,6 +28,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from ..oauth_creds import get_credentials
+from . import master_deck, why_ht
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -76,7 +77,8 @@ def _render_pptx(deck_json: str) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, "deck.pptx")
         proc = subprocess.run(
-            [NODE_BIN, RENDER_CLI, "-f", "pptx", "-o", out],
+            # --no-attribution: no "Made with presentation-md" credit on client decks.
+            [NODE_BIN, RENDER_CLI, "-f", "pptx", "-o", out, "--no-attribution"],
             input=deck_json.encode("utf-8"),
             capture_output=True,
             timeout=_RENDER_TIMEOUT,
@@ -159,7 +161,7 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
 
     Args:
         deck_json: the complete deck as JSON, matching presentation-md's
-            deck schema — an object with "type": "deck" and a "slides" array.
+            deck schema: an object with "type": "deck" and a "slides" array.
         client_name: who the deck is for; used to name the file.
         brief_id: the brief this deck belongs to. Pass "" when there isn't
             one and the deck's own file id becomes the brief id.
@@ -170,14 +172,25 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
     """
     # Normalize before both rendering and storing, so the stored copy is
     # always strictly parseable by a later update_deck.
-    deck_json = _normalize_deck_json(deck_json)
+    try:
+        deck = json.loads(_normalize_deck_json(deck_json))
+    except json.JSONDecodeError as exc:
+        return {"error": f"Deck JSON could not be parsed, nothing was published: {exc}"}
+    problems = master_deck.enforce(deck)
+    if problems:
+        return {
+            "error": "The deck breaks the HT master deck rules, nothing was "
+            "published. Fix every item and call build_solution_deck again.",
+            "problems": problems,
+        }
+    deck_json = json.dumps(deck)
     try:
         pptx = _render_pptx(deck_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
         return {"error": f"Deck was not valid, nothing was published: {exc}"}
 
     created = _upload_pptx(
-        pptx, name=f"Solution Deck — {client_name}", file_id=""
+        pptx, name=f"HT Media × {client_name} solution deck", file_id=""
     )
     deck_id = created["id"]
     link = created.get("webViewLink") or (
@@ -198,7 +211,7 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
 def update_deck(brief_id: str, edits_json: str) -> dict:
     """Change specific fields on specific slides of a deck already built.
 
-    Everything not named in the edits is left exactly as it was — this
+    Everything not named in the edits is left exactly as it was; this
     patches the stored deck rather than regenerating it.
 
     Args:
@@ -237,19 +250,68 @@ def update_deck(brief_id: str, edits_json: str) -> dict:
         slides[index][field] = edit.get("value")
         applied.append(f"slide {index}: {field}")
 
+    result = _republish(brief_id, stored, deck)
+    if "error" in result:
+        return result
+    return {**result, "edits_applied": applied}
+
+
+def add_why_ht_slides(brief_id: str, variants: str) -> dict:
+    """Add HT Media's credentials slides ("Why HT") to a deck already built.
+
+    The slides carry fixed, sourced HT figures. Never write HT's reach or
+    rankings into a deck any other way. An opener and a scale slide are always
+    added; choose up to two market slides that fit the brief. Asking again
+    replaces the earlier set instead of adding a second one.
+
+    Args:
+        brief_id: which brief's deck to change, from build_solution_deck or
+            lookup_deck. Never invented.
+        variants: comma-separated market slides, up to two, from
+            english-print, hindi-heartland, digital, delhi-ncr. Pass "" for
+            only the opener and scale slides.
+
+    Returns:
+        The deck's link and which credentials slides were inserted, or an
+        error naming what went wrong.
+    """
+    stored = _load_brief(brief_id)
+    if not stored or not stored.get("deck_json"):
+        return {"error": f"No stored deck found for brief_id {brief_id}."}
+    try:
+        deck = json.loads(stored["deck_json"])
+    except json.JSONDecodeError as exc:
+        return {"error": f"The stored deck could not be read: {exc}"}
+    inserted, unknown = why_ht.insert(deck, variants.split(","))
+    if unknown:
+        return {
+            "error": f"Unknown variants {unknown}; choose from "
+            f"{', '.join(why_ht.VARIANTS)}. The deck is unchanged."
+        }
+    result = _republish(brief_id, stored, deck)
+    if "error" in result:
+        return result
+    return {**result, "why_ht_slides": inserted}
+
+
+def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
+    """Check, re-render and replace a revised deck in place, keeping its file id."""
+    problems = master_deck.enforce(deck)
+    if problems:
+        return {
+            "error": "The change would break the HT master deck rules, the deck "
+            "is unchanged.",
+            "problems": problems,
+        }
     updated_json = json.dumps(deck)
     try:
         pptx = _render_pptx(updated_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
-        return {"error": f"Edit rejected, the deck is unchanged: {exc}"}
+        return {"error": f"Change rejected, the deck is unchanged: {exc}"}
 
     _upload_pptx(pptx, name="", file_id=stored["deck_file_id"])
     _save_brief(brief_id, deck_json=updated_json, status="drafted")
-    return {
-        "brief_id": brief_id,
-        "link": stored["deck_link"],
-        "edits_applied": applied,
-    }
+    return {"brief_id": brief_id, "link": stored["deck_link"]}
 
 
 def _load_brief(brief_id: str) -> dict | None:
@@ -275,7 +337,7 @@ def get_deck_outline(brief_id: str) -> dict:
     """List what's currently on each slide of a deck, with its index.
 
     update_deck addresses slides by index, and nobody should have to know
-    the index of "the closing slide" — read the outline instead of asking.
+    the index of "the closing slide"; read the outline instead of asking.
 
     Args:
         brief_id: which brief's deck to describe, from build_solution_deck
@@ -311,11 +373,11 @@ def lookup_deck(client_name: str) -> dict:
     """Find the most recent deck built for a client, so it can be edited.
 
     A conversation doesn't remember decks built in an earlier session, and
-    the email flow builds decks outside any conversation at all — this is
+    the email flow builds decks outside any conversation at all. This is
     how an existing deck gets found again instead of duplicated.
 
     Args:
-        client_name: the client name to search for — matches the value
+        client_name: the client name to search for. It matches the value
             passed to build_solution_deck, not a free-text query.
 
     Returns:
