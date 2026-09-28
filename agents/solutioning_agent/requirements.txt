@@ -6,3 +6,4 @@ google-genai
 google-auth
 python-dotenv
 google-cloud-discoveryengine
+requests
