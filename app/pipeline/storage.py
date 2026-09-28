@@ -199,11 +199,18 @@ def retrieval_summary(brief_id: str) -> list[dict]:
     """
     rows = _client().query(
         f"""
-        SELECT actor AS source, outcome,
-               ANY_VALUE(detail) AS detail, COUNT(*) AS calls
+        SELECT actor AS source,
+               -- One row per source, not per (source, outcome): a source
+               -- searched several times read as both "returned results" and
+               -- "returned nothing" on consecutive lines.
+               CASE WHEN COUNTIF(outcome = 'success') > 0 THEN 'success'
+                    WHEN COUNTIF(outcome = 'no_results') > 0 THEN 'no_results'
+                    ELSE 'error' END AS outcome,
+               COUNT(*) AS calls,
+               COUNTIF(outcome = 'success') AS successes
         FROM `{PROJECT}.{DATASET}.audit_log`
         WHERE brief_id = @brief_id AND event_type = 'retrieval'
-        GROUP BY source, outcome
+        GROUP BY source
         ORDER BY source
         """,
         job_config=bigquery.QueryJobConfig(

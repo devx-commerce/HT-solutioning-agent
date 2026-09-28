@@ -11,6 +11,8 @@ google-auth-oauthlib
 google-api-python-client
 google-adk
 python-dotenv
+# Renders the agent's Markdown evidence as HTML in the deck-drafted email.
+markdown-it-py
 # Only needed if a deploy passes --trace_to_cloud/--otel_to_cloud — without
 # it, the deployed container crashes on every startup attempt trying to
 # import opentelemetry.exporter.cloud_trace. Confirmed the hard way.
