@@ -17,6 +17,7 @@ import email.mime.text
 import html
 import os
 import re
+import urllib.parse
 
 from googleapiclient.discovery import build
 from markdown_it import MarkdownIt
@@ -93,6 +94,7 @@ def send_deck_notification(
     evidence: str | None = None,
     gaps: list[str] | None = None,
     retrievals: list[dict] | None = None,
+    allowed_urls: set[str] | None = None,
 ) -> None:
     """One new email to solutioning's own notify address — never a reply
     on the triggering thread, which may have external participants.
@@ -107,6 +109,15 @@ def send_deck_notification(
         # The agent lists its gaps inside its reply; lift them into their own
         # section rather than leaving it empty while the evidence repeats them.
         evidence, gaps = split_gaps(evidence)
+    if allowed_urls is not None and evidence:
+        evidence, removed = drop_unverified_claims(
+            evidence, allowed_urls | ({deck_link} if deck_link else set())
+        )
+        if removed:
+            gaps = [*(gaps or []), (
+                f"{removed} claim{'s' if removed != 1 else ''} removed because "
+                "it cited a link no research tool returned for this brief."
+            )]
 
     gap_lines = (
         "\n".join(f"  - {g.replace('**', '')}" for g in gaps)
@@ -230,6 +241,50 @@ def split_gaps(evidence: str) -> tuple[str, list[str]]:
             rest = "\n".join(lines[:start] + lines[end:]).strip()
             return rest, gaps
     return evidence, []
+
+
+_LINK = re.compile(r"\]\((https?://[^)\s]+)\)|(https?://[^\s)\]>]+)")
+_YOUTUBE_ID = re.compile(r"(?:youtube\.com/watch\?(?:.*&)?v=|youtu\.be/)([\w-]{6,})")
+_DRIVE_FILE_ID = re.compile(r"(?:[?&]id=|/d/)([-\w]{25,})")
+
+
+def _url_key(url: str) -> str:
+    """One key per destination, so a cited link matches what a tool returned
+    despite trailing slashes, tracking parameters or a Drive link's format."""
+    url = url.strip().rstrip(".,;:")
+    if "drive.google.com" in url or "docs.google.com" in url:
+        m = _DRIVE_FILE_ID.search(url)
+        if m:
+            return f"drive:{m.group(1)}"
+    m = _YOUTUBE_ID.search(url)
+    if m:
+        return f"youtube:{m.group(1)}"
+    parts = urllib.parse.urlsplit(url)
+    host = parts.netloc.lower().removeprefix("www.")
+    query = urllib.parse.urlencode([
+        (k, v) for k, v in urllib.parse.parse_qsl(parts.query)
+        if not k.lower().startswith("utm_")
+    ])
+    return f"{host}{parts.path.rstrip('/')}" + (f"?{query}" if query else "")
+
+
+def drop_unverified_claims(evidence: str, allowed_urls: set[str]) -> tuple[str, int]:
+    """Remove every line that cites a link no research tool returned.
+
+    The agent's reply is free text, so its citations are only as good as its
+    copying: a link it rewrote, shortened or supplied from memory would
+    otherwise reach the email looking like evidence. Fails closed: a line
+    with any unverified link goes, even if it also cites a good one.
+    """
+    allowed = {_url_key(u) for u in allowed_urls}
+    kept, removed = [], 0
+    for line in evidence.split("\n"):
+        links = [a or b for a, b in _LINK.findall(line)]
+        if any(_url_key(u) not in allowed for u in links):
+            removed += 1
+            continue
+        kept.append(line)
+    return "\n".join(kept), removed
 
 
 def _inline_html(text: str) -> str:

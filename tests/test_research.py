@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import sys
+import urllib.error
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -227,28 +228,54 @@ def test_non_vertex_urls_are_returned_untouched(url):
     urlopen.assert_not_called()
 
 
+def _redirecting_to(location):
+    """The grounding redirect answers 302 with the real url in Location."""
+    return urllib.error.HTTPError(
+        "https://vertexaisearch.cloud.google.com/r", 302, "Found",
+        {"Location": location} if location is not None else {}, None,
+    )
+
+
+REDIRECT = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc"
+
+
 def test_vertex_redirect_resolves_to_the_real_url():
-    redirect = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc"
-    with patch("urllib.request.urlopen") as urlopen:
-        urlopen.return_value = _urlopen_cm(_http_response(url="https://acme.com/real"))
-        assert research._resolve_redirect(redirect) == "https://acme.com/real"
+    with patch.object(research, "_no_redirect_opener") as opener:
+        opener.open.side_effect = _redirecting_to("https://acme.com/real")
+        assert research._resolve_redirect(REDIRECT) == "https://acme.com/real"
+
+
+def test_redirect_resolves_even_when_the_destination_blocks_bots():
+    """The destination is never requested, so its 403 or timeout can't matter."""
+    with patch.object(research, "_no_redirect_opener") as opener, \
+         patch("urllib.request.urlopen") as urlopen:
+        opener.open.side_effect = _redirecting_to("https://blocks-bots.com/a")
+        assert research._resolve_redirect(REDIRECT) == "https://blocks-bots.com/a"
+    urlopen.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "setup",
+    "location",
     [
-        pytest.param("raise", id="network_error"),
-        pytest.param("empty", id="no_final_url"),
+        pytest.param(None, id="no_location_header"),
+        pytest.param("", id="empty_location"),
+        pytest.param("/relative/path", id="relative_location"),
+        pytest.param(REDIRECT, id="redirects_to_another_redirect"),
+        pytest.param("javascript:alert(1)", id="not_http"),
     ],
 )
-def test_unresolvable_redirect_falls_back_to_original(setup):
-    redirect = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc"
-    with patch("urllib.request.urlopen") as urlopen:
-        if setup == "raise":
-            urlopen.side_effect = OSError("timed out")
-        else:
-            urlopen.return_value = _urlopen_cm(_http_response(url=""))
-        assert research._resolve_redirect(redirect) == redirect
+def test_unresolvable_redirect_is_none_never_the_expiring_link(location):
+    with patch.object(research, "_no_redirect_opener") as opener:
+        opener.open.side_effect = _redirecting_to(location)
+        assert research._resolve_redirect(REDIRECT) is None
+
+
+def test_network_error_retries_once_then_gives_none():
+    with patch.object(research, "_no_redirect_opener") as opener:
+        opener.open.side_effect = [OSError("timed out"), _redirecting_to("https://a.com/x")]
+        assert research._resolve_redirect(REDIRECT) == "https://a.com/x"
+        opener.open.side_effect = OSError("timed out")
+        assert research._resolve_redirect(REDIRECT) is None
 
 
 def test_resolve_all_with_no_urls_makes_no_threads():
@@ -355,15 +382,67 @@ def test_missing_chunk_title_becomes_empty_string_not_none():
 
 def test_sources_carry_the_resolved_url_not_the_expiring_redirect():
     """The citation trail has to survive the redirect expiring."""
-    redirect = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc"
-    resp = _grounded_response([_chunk(redirect, "A")], [_support("Claim.", [0])])
+    resp = _grounded_response([_chunk(REDIRECT, "A")], [_support("Claim.", [0])])
     with patch.object(research, "_log_retrieval"), \
-         patch("urllib.request.urlopen") as urlopen, \
+         patch.object(research, "_no_redirect_opener") as opener, \
          _genai_returning(resp):
-        urlopen.return_value = _urlopen_cm(_http_response(url="https://acme.com/real"))
+        opener.open.side_effect = _redirecting_to("https://acme.com/real")
         sources = research.search_web("acme", "b")["findings"][0]["sources"]
 
     assert sources == [{"url": "https://acme.com/real", "title": "A"}]
+
+
+def test_a_source_that_cannot_be_resolved_is_dropped_with_its_claim():
+    resp = _grounded_response(
+        [_chunk(REDIRECT, "Gone"), _chunk("https://kept.com", "Kept")],
+        [_support("Only cites the dead link.", [0]),
+         _support("Cites both.", [0, 1])],
+    )
+    with patch.object(research, "_log_retrieval") as log, \
+         patch.object(research, "_resolve_redirect",
+                      side_effect=lambda u: None if u == REDIRECT else u), \
+         _genai_returning(resp):
+        findings = research.search_web("acme", "b")["findings"]
+
+    assert findings == [
+        {"claim": "Cites both.", "sources": [{"url": "https://kept.com", "title": "Kept"}]}
+    ]
+    assert all("vertexaisearch" not in s["url"] for f in findings for s in f["sources"])
+    assert log.call_args.kwargs["unresolved_sources"] == 1
+
+
+def test_an_ungrounded_answer_is_retried_once():
+    """The model sometimes answers from memory without searching."""
+    ungrounded = _grounded_response([], [], searches=())
+    grounded = _grounded_response([_chunk("https://a.com")], [_support("Claim.", [0])])
+    with patch.object(research, "_log_retrieval") as log, _genai_returning() as generate:
+        generate.side_effect = [ungrounded, grounded]
+        result = research.search_web("acme", "b")
+
+    assert generate.call_count == 2
+    assert [f["claim"] for f in result["findings"]] == ["Claim."]
+    assert log.call_args.kwargs["attempts"] == 2
+
+
+def test_the_research_model_is_told_to_search_and_answer_only_from_results():
+    resp = _grounded_response([_chunk("https://a.com")], [_support("Claim.", [0])])
+    with patch.object(research, "_log_retrieval"), _genai_returning(resp) as generate:
+        research.search_web("acme", "b")
+
+    config = generate.call_args.kwargs["config"]
+    assert config.system_instruction == research._GROUNDED_ONLY
+    assert "memory" in research._GROUNDED_ONLY
+
+
+def test_search_web_logs_the_urls_it_returned():
+    resp = _grounded_response(
+        [_chunk("https://b.com"), _chunk("https://a.com")],
+        [_support("One.", [0]), _support("Two.", [1, 0])],
+    )
+    with patch.object(research, "_log_retrieval") as log, _genai_returning(resp):
+        research.search_web("acme", "b")
+
+    assert log.call_args.kwargs["source_urls"] == ["https://a.com", "https://b.com"]
 
 
 def test_searches_actually_run_are_reported():
@@ -397,6 +476,7 @@ def test_search_web_logs_no_results_when_nothing_is_grounded():
     assert result == {"findings": [], "searches_run": []}
     log.assert_called_once()
     assert log.call_args[0][:3] == ("brief-1", "web_search", "no_results")
+    assert log.call_args[1]["attempts"] == 2
     assert log.call_args[1]["result_count"] == 0
 
 
@@ -441,7 +521,8 @@ def _past_decks_configured(allowed=frozenset(), in_folder=True):
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=allowed), \
          patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=in_folder):
+         patch.object(research, "_past_deck_file_id",
+                      return_value="1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456" if in_folder else None):
         yield
 
 
@@ -729,7 +810,7 @@ ALLOWED = frozenset({"1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456"})
     ("https://x/abc", "", False),
 ])
 def test_only_files_in_the_decks_folder_pass_the_filter(link, doc_id, expected):
-    assert research._in_past_decks_folder(ALLOWED, link, doc_id) is expected
+    assert bool(research._past_deck_file_id(ALLOWED, link, doc_id)) is expected
 
 
 IN_FOLDER = "https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456/view"
@@ -850,3 +931,15 @@ def test_past_deck_file_ids_collects_from_every_configured_folder():
          patch("googleapiclient.discovery.build", return_value=drive):
         assert research._past_deck_file_ids() == frozenset({"one", "two"})
     research._past_deck_file_ids.cache_clear()
+
+
+def test_a_deck_with_no_uri_still_gets_an_openable_link():
+    answer = _answer(references=[_ref(uri="", document="a/b/documents/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456")])
+    with _past_decks_configured(), \
+         patch.object(research, "_log_retrieval") as log, \
+         _fake_discoveryengine(answer):
+        result = research.search_past_decks("acme", "b")
+
+    link = "https://drive.google.com/open?id=1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456"
+    assert result["results"][0]["link"] == link
+    assert log.call_args.kwargs["source_urls"] == [link]

@@ -222,6 +222,28 @@ def retrieval_summary(brief_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def retrieved_urls(brief_id: str) -> set[str]:
+    """Every source url a research tool returned for this brief.
+
+    The allow-list the delivery email's citations are checked against: a
+    link the agent cites that no tool returned did not come from research.
+    """
+    rows = _client().query(
+        f"""
+        SELECT DISTINCT url
+        FROM `{PROJECT}.{DATASET}.audit_log`,
+             UNNEST(JSON_VALUE_ARRAY(detail, '$.source_urls')) AS url
+        WHERE brief_id = @brief_id AND event_type = 'retrieval'
+        """,
+        job_config=bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id)
+            ]
+        ),
+    ).result()
+    return {r["url"] for r in rows}
+
+
 def mark_thread_failed(thread_id: str, detail: str) -> None:
     _update_thread(thread_id, status="failed")
     record_decision(thread_id, "build_failed", detail)

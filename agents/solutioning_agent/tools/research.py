@@ -86,27 +86,62 @@ def _log_retrieval(
         pass
 
 
-def _resolve_redirect(url: str) -> str:
-    """Grounding returns expiring vertexaisearch redirect links; follow to the real one.
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Surface a redirect as an HTTPError instead of following it."""
 
-    The evidence summary lands in an email somebody may open weeks later, so a
-    redirect that has since expired would break the citation trail.
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_no_redirect_opener = urllib.request.build_opener(_NoRedirect())
+
+
+def _resolve_redirect(url: str) -> str | None:
+    """Grounding returns expiring vertexaisearch redirect links; return the real one.
+
+    The evidence summary lands in an email somebody may open weeks later, so
+    an expiring redirect would break the citation trail. Reads the target
+    from the redirect's Location header rather than following it: following
+    fails whenever the destination blocks bots or is slow, even though Google
+    already named it. None when no real url can be established, so the
+    caller drops the source rather than cite a link that will stop working.
     """
     if "vertexaisearch.cloud.google.com" not in url:
         return url
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-        with urllib.request.urlopen(req, timeout=_REDIRECT_TIMEOUT) as resp:
-            return resp.url or url
-    except Exception:  # noqa: BLE001 - an unresolvable redirect still works today
-        return url
+    for _ in range(2):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+            with _no_redirect_opener.open(req, timeout=_REDIRECT_TIMEOUT):
+                return None  # a 200 with no redirect names no destination
+        except urllib.error.HTTPError as exc:
+            location = exc.headers.get("Location", "") if exc.headers else ""
+            parsed = urllib.parse.urlparse(location)
+            if (parsed.scheme in ("http", "https") and parsed.netloc
+                    and "vertexaisearch.cloud.google.com" not in parsed.netloc):
+                return location
+            return None
+        except Exception:  # noqa: BLE001 - a network blip gets one retry
+            continue
+    return None
 
 
-def _resolve_all(urls: list[str]) -> dict[str, str]:
+def _resolve_all(urls: list[str]) -> dict[str, str | None]:
     if not urls:
         return {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         return dict(zip(urls, pool.map(_resolve_redirect, urls)))
+
+
+# The research model is a plain Gemini call with search available, and left
+# to itself it sometimes answers from memory without searching: fluent text
+# with no grounding metadata at all, all of which has to be dropped.
+_GROUNDED_ONLY = (
+    "Search Google before answering, every time, even when you think you "
+    "already know. Answer only with facts stated in the search results, "
+    "keeping names, dates and figures exactly as the sources give them. If "
+    "the results don't cover part of the question, say that part was not "
+    "found. Never fill it in from memory."
+)
 
 
 def search_web(query: str, brief_id: str) -> dict:
@@ -131,48 +166,26 @@ def search_web(query: str, brief_id: str) -> dict:
         from google.genai import types
 
         client = genai.Client(vertexai=True, project=PROJECT, location=MODEL_LOCATION)
-        resp = client.models.generate_content(
-            model=RESEARCH_MODEL,
-            contents=query,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    disable=True
-                ),
+        config = types.GenerateContentConfig(
+            system_instruction=_GROUNDED_ONLY,
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
             ),
         )
+        # One retry when an answer comes back with nothing grounded: the
+        # model skipped searching, and a second ask usually searches.
+        for attempt in (1, 2):
+            resp = client.models.generate_content(
+                model=RESEARCH_MODEL, contents=query, config=config
+            )
+            findings, meta, unresolved = _grounded_findings(resp)
+            if findings:
+                break
     except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
         _log_retrieval(brief_id, "web_search", "error", started, query=query,
                        error=str(exc)[:300])
         return {"findings": [], "searches_run": [], "error": str(exc)[:300]}
-
-    candidate = resp.candidates[0] if resp.candidates else None
-    meta = getattr(candidate, "grounding_metadata", None) if candidate else None
-    chunks = (getattr(meta, "grounding_chunks", None) or []) if meta else []
-    supports = (getattr(meta, "grounding_supports", None) or []) if meta else []
-
-    resolved = _resolve_all(
-        [c.web.uri for c in chunks if getattr(c, "web", None) and c.web.uri]
-    )
-
-    def _sources_for(indices) -> list[dict]:
-        out, seen = [], set()
-        for i in indices or []:
-            if i >= len(chunks) or not getattr(chunks[i], "web", None):
-                continue
-            url = resolved.get(chunks[i].web.uri, chunks[i].web.uri)
-            if url and url not in seen:
-                seen.add(url)
-                out.append({"url": url, "title": chunks[i].web.title or ""})
-        return out
-
-    findings = []
-    for support in supports:
-        segment = getattr(support, "segment", None)
-        claim = (getattr(segment, "text", "") or "").strip()
-        sources = _sources_for(getattr(support, "grounding_chunk_indices", None))
-        if claim and sources:
-            findings.append({"claim": claim, "sources": sources})
 
     searches = list(getattr(meta, "web_search_queries", None) or []) if meta else []
     _log_retrieval(
@@ -183,8 +196,54 @@ def search_web(query: str, brief_id: str) -> dict:
         query=query,
         result_count=len(findings),
         searches_run=searches,
+        attempts=attempt,
+        unresolved_sources=unresolved,
+        source_urls=_urls_in(findings, "url"),
     )
     return {"findings": findings, "searches_run": searches}
+
+
+def _urls_in(findings: list[dict], key: str) -> list[str]:
+    """Every source url a tool handed the agent, for checking its citations later."""
+    return sorted({s[key] for f in findings for s in f["sources"] if s.get(key)})
+
+
+def _grounded_findings(resp) -> tuple[list[dict], object, int]:
+    """Claims from a grounded response, each with the resolved urls it rests on.
+
+    Returns the findings, the grounding metadata, and how many sources were
+    dropped for having no resolvable url.
+    """
+    candidate = resp.candidates[0] if resp.candidates else None
+    meta = getattr(candidate, "grounding_metadata", None) if candidate else None
+    chunks = (getattr(meta, "grounding_chunks", None) or []) if meta else []
+    supports = (getattr(meta, "grounding_supports", None) or []) if meta else []
+
+    resolved = _resolve_all(
+        [c.web.uri for c in chunks if getattr(c, "web", None) and c.web.uri]
+    )
+    unresolved = sum(1 for url in resolved.values() if not url)
+
+    def _sources_for(indices) -> list[dict]:
+        out, seen = [], set()
+        for i in indices or []:
+            if i >= len(chunks) or not getattr(chunks[i], "web", None):
+                continue
+            url = resolved.get(chunks[i].web.uri)
+            if url and url not in seen:
+                seen.add(url)
+                out.append({"url": url, "title": chunks[i].web.title or ""})
+        return out
+
+    findings = []
+    for support in supports:
+        segment = getattr(support, "segment", None)
+        claim = (getattr(segment, "text", "") or "").strip()
+        sources = _sources_for(getattr(support, "grounding_chunk_indices", None))
+        # A claim whose every source failed to resolve goes with them.
+        if claim and sources:
+            findings.append({"claim": claim, "sources": sources})
+    return findings, meta, unresolved
 
 
 @functools.lru_cache(maxsize=1)
@@ -219,16 +278,16 @@ def _past_deck_file_ids() -> frozenset[str]:
 _DRIVE_ID_RE = re.compile(r"[-\w]{25,}")
 
 
-def _in_past_decks_folder(allowed: frozenset[str], *candidates: str) -> bool:
-    """True only if some candidate string carries an allowed Drive file id.
+def _past_deck_file_id(allowed: frozenset[str], *candidates: str) -> str | None:
+    """The allowed Drive file id some candidate string carries, if any.
 
     Fails closed: an unrecognisable result is dropped rather than shown.
     """
     for text in candidates:
         for token in _DRIVE_ID_RE.findall(text or ""):
             if token in allowed:
-                return True
-    return False
+                return token
+    return None
 
 
 _MARKUP_RE = re.compile(r"</?b>")
@@ -243,7 +302,10 @@ def search_past_decks(query: str, brief_id: str) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 
     Args:
-        query: what to look for: a client, an industry, a campaign type.
+        query: a short phrase for one angle of the brief: the client, the
+            category, the objective, the audience or a format. Call once
+            per angle; a single brand-name search misses decks for
+            similar briefs.
         brief_id: the brief this research belongs to; pass "" for ad-hoc
             research not tied to a brief.
 
@@ -347,9 +409,13 @@ def search_past_decks(query: str, brief_id: str) -> dict:
             continue
         link = getattr(meta, "uri", "") or ""
         document = getattr(meta, "document", "") or ""
-        if not _in_past_decks_folder(allowed, link, document):
+        file_id = _past_deck_file_id(allowed, link, document)
+        if not file_id:
             filtered_out += 1
             continue
+        # Every cited deck needs a link a reader can open. The file id is
+        # verified above, so a missing uri is rebuilt from it, never left blank.
+        link = link or f"https://drive.google.com/open?id={file_id}"
         title = getattr(meta, "title", "") or document.rsplit("/", 1)[-1]
         sources_by_id[str(index)] = {"title": title, "link": link}
         deck = decks.setdefault(
@@ -389,6 +455,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         query=query,
         result_count=len(results),
         filtered_out=filtered_out,
+        source_urls=sorted({d["link"] for d in results}),
     )
     return {"results": results, "findings": findings}
 
@@ -456,6 +523,7 @@ def search_youtube(query: str, brief_id: str) -> dict:
         started,
         query=query,
         result_count=len(results),
+        source_urls=[r["url"] for r in results],
     )
     return {"results": results}
 
@@ -539,5 +607,6 @@ def fetch_url(url: str, brief_id: str) -> dict:
         url=url,
         final_url=final_url,
         chars=len(text),
+        source_urls=[final_url] if text else [],
     )
     return {"url": final_url, "title": extractor.title, "text": text}

@@ -306,6 +306,7 @@ def execute_build(payload: dict) -> str:
         deck_link=_deck_link(reply),
         evidence=reply,
         retrievals=storage.retrieval_summary(thread_id),
+        allowed_urls=storage.retrieved_urls(thread_id),
     )
     sheet.append_row(
         client_name=payload["client_name"],

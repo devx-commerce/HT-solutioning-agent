@@ -116,3 +116,60 @@ def test_a_reply_with_no_gaps_block_is_left_unchanged():
 def test_a_sentence_that_mentions_a_gap_is_not_a_gaps_block():
     reply = "### Findings\n* The brand has a clear gap in rural reach that HT's Hindi print can fill, which matters.\n"
     assert notifications.split_gaps(reply) == (reply, [])
+
+
+# --- every link in the evidence must be one a research tool returned -------
+
+
+DRIVE_ID = "1DLFGa1d3gfNG5cUDJqgmZjnIfyW7OiaQ"
+
+
+def test_lines_citing_only_returned_links_are_kept():
+    text = "- Maggi ran nukkad nataks ([deck](https://drive.google.com/a/ht.com/open?id=%s))" % DRIVE_ID
+    out, removed = notifications.drop_unverified_claims(
+        text, {f"https://drive.google.com/open?id={DRIVE_ID}"}
+    )
+    assert (out, removed) == (text, 0)
+
+
+def test_a_claim_citing_a_link_no_tool_returned_is_removed():
+    text = "\n".join([
+        "### Findings",
+        "- Real ([afaqs](https://www.afaqs.com/news/a/?utm_source=x)).",
+        "- Invented ([ET](https://economictimes.com/made-up)).",
+        "- Mixed ([afaqs](https://afaqs.com/news/a)) and https://nowhere.com/b.",
+        "No link, kept.",
+    ])
+    out, removed = notifications.drop_unverified_claims(text, {"https://afaqs.com/news/a"})
+    assert removed == 2
+    assert out.split("\n") == ["### Findings", "- Real ([afaqs](https://www.afaqs.com/news/a/?utm_source=x)).", "No link, kept."]
+
+
+@pytest.mark.parametrize("cited, returned", [
+    ("https://youtu.be/DozotvPZgCM", "https://www.youtube.com/watch?v=DozotvPZgCM"),
+    (f"https://drive.google.com/file/d/{DRIVE_ID}/view", f"https://drive.google.com/open?id={DRIVE_ID}"),
+    ("https://www.acme.com/a/", "https://acme.com/a"),
+])
+def test_the_same_destination_matches_across_link_formats(cited, returned):
+    assert notifications._url_key(cited) == notifications._url_key(returned)
+
+
+def test_removed_claims_are_reported_as_a_gap_and_the_deck_link_survives(monkeypatch):
+    monkeypatch.setenv("SOLUTIONING_NOTIFY_EMAIL", "solutioning@example.com")
+    captured = {}
+    gmail = MagicMock()
+    gmail.users.return_value.messages.return_value.send.side_effect = (
+        lambda userId, body: captured.update(body) or MagicMock()
+    )
+    deck = "https://docs.google.com/presentation/d/1XkNNNjxn3rqiusMVmxO3IyeknSSaMquwfrlWWPz5tRA/edit"
+    with patch.object(notifications, "build", return_value=gmail), \
+         patch.object(notifications, "get_credentials", return_value=None):
+        notifications.send_deck_notification(
+            "Rapido", "Metro se ghar tak.", deck_link=deck,
+            evidence=f"Deck: {deck}\n- Invented ([x](https://made.up/a)).",
+            gaps=[], allowed_urls=set(),
+        )
+    text = _part(email.message_from_bytes(base64.urlsafe_b64decode(captured["raw"])), "plain")
+    assert "made.up" not in text
+    assert f"Deck: {deck}" in text
+    assert "1 claim removed because it cited a link no research tool returned" in text
