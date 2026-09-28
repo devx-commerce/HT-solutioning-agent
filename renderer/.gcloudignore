@@ -1,0 +1,6 @@
+# Upload only what the image needs. Without this file gcloud falls back to
+# .gitignore, which excludes dist/ (the bundle), and the image would be empty.
+*
+!Dockerfile
+!dist/
+!dist/**
