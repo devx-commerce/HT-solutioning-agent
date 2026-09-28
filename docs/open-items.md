@@ -43,6 +43,83 @@ being acted on right now.
   Not attempted autonomously: creating this touches how much of HT's Drive
   gets indexed, which is theirs to approve.
 
+  **Status 2026-09-25 (post-admin-change): still returning zero, and the
+  fault is provably not ours.** Evidence, so this isn't re-diagnosed:
+  1. Drive API as `sales.agent@` lists all 19 decks in the folder, and
+     Drive's own `fullText contains 'Maggi'` finds the deck. Drive
+     permissions, the identity and the scopes are fine.
+  2. Engine `ht-sales-pitch-agent_1789729673554` is wired to
+     `solutioning-agent-past-decks_1790319778373_google_drive`
+     (`GOOGLE_WORKSPACE`, `aclEnabled`, `dasherCustomerId C03jr3210`).
+     Connector `ACTIVE`, `FEDERATED`, `errors: []`.
+  3. Searching the engine *and* the data store directly returns 0 results
+     with HTTP 200. Cloud Logging records these as `INFO` with no status
+     message — the backend genuinely returns nothing; it is not a
+     suppressed permission error.
+  4. A **second Drive connector** (`drive-connector_1790312264757`) fails
+     identically — and audit logs show it was created by
+     `manish.aggarwal@hindustantimes.com`, HT's own Workspace admin, at
+     04:57 UTC. So the failure is not specific to a connector built by an
+     external `@devxlabs.ai` identity. (This also explains the previously
+     "unexplained Gmail connector" — same admin, same morning. That one is
+     worse off: `INITIALIZATION_FAILED`, *"pipeline failure. Please delete
+     connector and retry creation."*)
+  5. Gemini Enterprise's own first-party chat also retrieves nothing — and
+     hallucinates a plausible proposal instead of saying so.
+
+  **Ruled out:** smart features. Both per-user toggles were confirmed on
+  for `sales.agent@` on 2026-09-25 ("Smart features in Google Workspace"
+  was already on and is the one covering Drive; "in other Google products"
+  was switched on too). Searches still returned zero immediately after.
+  Note Workspace setting changes can take up to 24h to propagate, so a
+  delayed recovery would not be surprising.
+
+  **RESOLVED 2026-09-25 — it was the API surface, not the configuration.**
+  A `FEDERATED` Workspace data store returns nothing from
+  `SearchService.search` (`servingConfigs/default_search:search`), which is
+  what `search_past_decks` was calling. The same serving config answers
+  correctly on **`:answer`** (and on
+  `assistants/default_assistant:streamAssist`). Verified: query
+  "Maggi proposal" returned real deck content — the Nukkad Natak activation,
+  "Sirf paanch rupaye mein", 400 Nukkad Nataks across 50 districts in UP,
+  Nov–Dec '21 — with 34 citations and references carrying
+  `title` ("Maggi Masala ae Magic X HT Media.pptx"), a Drive `uri`, and the
+  Drive file id (`1i07uWMxf-gE4ZLuSsxaWYalPKDOwfzob`, parent
+  `1W7C53D5nLxFQTX0GuAeaIYWzjuWVr7MO` — so the existing folder allow-list
+  still applies unchanged).
+
+  This is why every config check passed: nothing *was* misconfigured. The
+  connector never indexes (federated = live query), so there are no
+  documents for `:search` to match; retrieval only happens inside answer
+  generation. Zero results with HTTP 200 and an `INFO` log is the expected
+  shape of that, not a fault.
+
+  **Done** — `search_past_decks` now calls
+  `ConversationalSearchServiceClient.answer_query` (v1alpha) and returns
+  `results` (deduped decks) plus `findings` (`{claim, sources}`). Verified
+  live against 10 brands. Three things learned while porting, each now
+  covered by a test:
+  - **v1alpha, not v1.** v1's `answer_query` returns "a summary could not be
+    generated" against this same serving config.
+  - **Citation offsets are UTF-8 byte positions**, not character positions —
+    slicing the `str` mangles any claim containing `₹` or an em dash.
+  - **Bare one-word queries are rejected** with
+    `OUT_OF_DOMAIN_QUERY_IGNORED` ("Rocksport" finds nothing, "Rocksport
+    proposal" finds the deck). The agent instruction now says to use a
+    phrase and retry before concluding there is no prior work.
+
+- **The past decks exist in two Drive folders and both must be
+  allow-listed.** `1W7C53D5nLxFQTX0GuAeaIYWzjuWVr7MO` (working copy) and
+  `1P2dOh60waUoIHgeaoaGE1zYqAiBzM9F_` (the original folder from the first
+  brief) hold the same decks, and the connector returns whichever copy
+  Drive's index prefers. With only the first allow-listed, roughly half
+  the corpus was silently dropped — "Muthoot Finance" retrieved 10 correct
+  references and every one was filtered out, logging `no_results`, which
+  reads as "HT never pitched them". `PAST_DECKS_FOLDER_ID` is now
+  comma-separated. **If decks are ever consolidated into one folder, or a
+  third folder appears, this variable has to be updated** — nothing detects
+  it, and the failure is silent and looks like an empty corpus.
+
 - **Does Gemini Enterprise's chat surface forward an uploaded file's bytes
   (or a storage reference) to the agent in a form a tool function can
   access?** Not confirmed by anything in this repo or the SOW — no

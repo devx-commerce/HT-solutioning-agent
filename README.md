@@ -175,7 +175,7 @@ gcloud run deploy solutioning-agent \
   --source=. \
   --region=us-central1 \
   --no-allow-unauthenticated \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=academic-diode-477405-m3,GOOGLE_CLOUD_LOCATION=us-central1,BQ_DATASET=solutioning_agent,OAUTH_TOKEN_SECRET=projects/296974829876/secrets/solutioning-agent-oauth/versions/latest,OAUTH_CLIENT_SECRET=projects/296974829876/secrets/solutioning-agent-oauth-client/versions/latest,STATE_SIGNING_KEY=YOUR_RANDOM_KEY,ALLOWED_ONBOARD_DOMAIN=hindustantimes.com,BRIEFS_SHEET_ID=YOUR_SHEET_ID,CLASSIFY_MODEL=gemini-2.0-flash-lite,BUILD_WORK_TOPIC=solutioning-agent-build-work,SOLUTIONING_NOTIFY_EMAIL=sales.agent@hindustantimes.com"
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=academic-diode-477405-m3,GOOGLE_CLOUD_LOCATION=us-central1,BQ_DATASET=solutioning_agent,OAUTH_TOKEN_SECRET=projects/296974829876/secrets/solutioning-agent-oauth/versions/latest,OAUTH_CLIENT_SECRET=projects/296974829876/secrets/solutioning-agent-oauth-client/versions/latest,STATE_SIGNING_KEY=YOUR_RANDOM_KEY,ALLOWED_ONBOARD_DOMAIN=hindustantimes.com,BRIEFS_SHEET_ID=YOUR_SHEET_ID,CLASSIFY_MODEL=gemini-2.5-flash-lite,BUILD_WORK_TOPIC=solutioning-agent-build-work,SOLUTIONING_NOTIFY_EMAIL=sales.agent@hindustantimes.com"
 ```
 
 Then the public onboarding one, same source, `PUBLIC_ROUTES_ONLY=true` added

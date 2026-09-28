@@ -20,6 +20,8 @@ from google.genai import types
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+# Separate from LOCATION: Gemini 3.x is served only from `global` here.
+MODEL_LOCATION = os.environ.get("MODEL_LOCATION", LOCATION)
 # gemini-2.0-flash-lite is not a valid model in this project/region — 404s
 # every time (confirmed live 2026-09-24). gemini-2.5-flash-lite is the real
 # cheap-tier model that actually exists here.
@@ -82,7 +84,7 @@ class ExtractResult:
 
 
 def _client() -> genai.Client:
-    return genai.Client(vertexai=True, project=PROJECT, location=LOCATION)
+    return genai.Client(vertexai=True, project=PROJECT, location=MODEL_LOCATION)
 
 
 _CLASSIFY_INSTRUCTION = f"""

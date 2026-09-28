@@ -91,29 +91,50 @@ def _genai_returning(resp=None, error=None):
 
 
 @contextmanager
-def _fake_discoveryengine(hits=(), error=None):
+def _fake_discoveryengine(answer=None, error=None):
+    """Stands in for the v1alpha answer_query path.
+
+    Not search: a FEDERATED Workspace store returns nothing from
+    SearchService.search, so retrieval happens inside answer generation.
+    """
     module = MagicMock()
-    client = module.SearchServiceClient.return_value
+    client = module.ConversationalSearchServiceClient.return_value
     if error is not None:
-        client.search.side_effect = error
+        client.answer_query.side_effect = error
     else:
-        client.search.return_value = list(hits)
-    with patch.dict(sys.modules, {"google.cloud.discoveryengine_v1": module}):
+        client.answer_query.return_value = MagicMock(answer=answer)
+    with patch.dict(sys.modules, {"google.cloud.discoveryengine_v1alpha": module}):
         yield module
 
 
-def _deck_hit(title="Acme 2024", link="https://drive/x", snippets=("a snippet",), doc=True):
-    hit = MagicMock()
-    if not doc:
-        hit.document = None
-        return hit
-    hit.document.id = "doc-1"
-    hit.document.derived_struct_data = {
-        "title": title,
-        "link": link,
-        "snippets": [{"snippet": s} for s in snippets],
-    }
-    return hit
+def _ref(title="Acme 2024", uri="https://drive/x", document="", content="a snippet"):
+    reference = MagicMock()
+    reference.chunk_info.content = content
+    reference.chunk_info.document_metadata.title = title
+    reference.chunk_info.document_metadata.uri = uri
+    reference.chunk_info.document_metadata.document = document
+    return reference
+
+
+def _ref_without_metadata():
+    reference = MagicMock()
+    reference.chunk_info.document_metadata = None
+    return reference
+
+
+def _cite(start, end, reference_ids):
+    citation = MagicMock()
+    citation.start_index, citation.end_index = start, end
+    citation.sources = [MagicMock(reference_id=r) for r in reference_ids]
+    return citation
+
+
+def _answer(text="", references=(), citations=()):
+    answer = MagicMock()
+    answer.answer_text = text
+    answer.references = list(references)
+    answer.citations = list(citations)
+    return answer
 
 
 # --- _log_retrieval: the transparency row itself --------------------------
@@ -414,72 +435,87 @@ def test_past_decks_unconfigured_is_an_explicit_error_and_is_logged():
     assert log.call_args[0][:3] == ("brief-1", "past_decks", "error")
 
 
-def test_past_decks_returns_title_link_and_snippet():
-    hit = _deck_hit(snippets=("first bit", "second bit"))
+@contextmanager
+def _past_decks_configured(allowed=frozenset(), in_folder=True):
     with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
+         patch.object(research, "_past_deck_file_ids", return_value=allowed), \
          patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=True), \
+         patch.object(research, "_in_past_decks_folder", return_value=in_folder):
+        yield
+
+
+def test_past_decks_returns_the_deck_and_the_claims_it_grounds():
+    answer = _answer(
+        text="Nukkad Natak toured 50 districts.",
+        references=[_ref(content="Nukkad <b>Natak</b> &quot;plan&quot;")],
+        citations=[_cite(0, 33, ["0"])],
+    )
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval") as log, \
-         _fake_discoveryengine([hit]):
+         _fake_discoveryengine(answer):
         result = research.search_past_decks("acme", "brief-1")
 
     assert result["results"] == [
-        {"title": "Acme 2024", "link": "https://drive/x", "snippet": "first bit second bit"}
+        {"title": "Acme 2024", "link": "https://drive/x", "snippet": 'Nukkad Natak "plan"'}
+    ]
+    assert result["findings"] == [
+        {
+            "claim": "Nukkad Natak toured 50 districts.",
+            "sources": [{"title": "Acme 2024", "link": "https://drive/x"}],
+        }
     ]
     assert log.call_args[0][:3] == ("brief-1", "past_decks", "success")
 
 
-def test_past_decks_skips_hits_without_a_document():
-    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=True), \
-         patch.object(research, "_log_retrieval"), \
-         _fake_discoveryengine([_deck_hit(doc=False), _deck_hit()]):
+def test_past_decks_skips_references_without_document_metadata():
+    answer = _answer(references=[_ref_without_metadata(), _ref()])
+    with _past_decks_configured(), \
+         patch.object(research, "_log_retrieval") as log, \
+         _fake_discoveryengine(answer):
         result = research.search_past_decks("acme", "b")
 
     assert len(result["results"]) == 1
+    assert log.call_args.kwargs["filtered_out"] == 1
 
 
-def test_past_decks_falls_back_to_document_id_when_untitled():
-    hit = _deck_hit()
-    hit.document.derived_struct_data = {"link": "https://drive/x", "snippets": []}
-    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=True), \
+def test_past_decks_falls_back_to_the_document_id_when_untitled():
+    answer = _answer(references=[_ref(title="", uri="", document="a/b/documents/doc-1")])
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval"), \
-         _fake_discoveryengine([hit]):
+         _fake_discoveryengine(answer):
         result = research.search_past_decks("acme", "b")
 
     assert result["results"][0]["title"] == "doc-1"
 
 
+def test_past_decks_dedupes_repeated_references_to_one_deck():
+    """Every cited chunk is its own reference, so one deck arrives many times."""
+    answer = _answer(
+        references=[_ref(content="first bit"), _ref(content="second bit")],
+    )
+    with _past_decks_configured(), \
+         patch.object(research, "_log_retrieval"), \
+         _fake_discoveryengine(answer):
+        result = research.search_past_decks("acme", "b")
+
+    assert len(result["results"]) == 1
+    assert result["results"][0]["snippet"] == "first bit second bit"
+
+
 def test_past_decks_logs_no_results_on_an_empty_corpus_hit():
-    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=True), \
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval") as log, \
-         _fake_discoveryengine([]):
+         _fake_discoveryengine(_answer()):
         result = research.search_past_decks("acme", "brief-1")
 
-    assert result == {"results": []}
+    assert result == {"results": [], "findings": []}
     log.assert_called_once()
     assert log.call_args[0][:3] == ("brief-1", "past_decks", "no_results")
 
 
-def test_past_decks_search_failure_is_reported_and_logged():
-    with patch.object(research, "PAST_DECKS_ENGINE", "decks"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
-         patch.object(research, "_in_past_decks_folder", return_value=True), \
+def test_past_decks_answer_failure_is_reported_and_logged():
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval") as log, \
          _fake_discoveryengine(error=RuntimeError("permission denied")):
         result = research.search_past_decks("acme", "brief-1")
@@ -696,58 +732,79 @@ def test_only_files_in_the_decks_folder_pass_the_filter(link, doc_id, expected):
     assert research._in_past_decks_folder(ALLOWED, link, doc_id) is expected
 
 
-def test_search_past_decks_drops_results_outside_the_folder():
-    hit_ok = MagicMock()
-    hit_ok.document.id = "d1"
-    hit_ok.document.derived_struct_data = {
-        "title": "Fortis X HT Media",
-        "link": "https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456/view",
-        "snippets": [{"snippet": "prior campaign"}],
-    }
-    hit_bad = MagicMock()
-    hit_bad.document.id = "d2"
-    hit_bad.document.derived_struct_data = {
-        "title": "Sample of contract",
-        "link": "https://docs.google.com/document/d/1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ/edit",
-        "snippets": [{"snippet": "indemnity clause"}],
-    }
+IN_FOLDER = "https://drive.google.com/file/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456/view"
+OUTSIDE = "https://docs.google.com/document/d/1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ/edit"
 
+
+def test_search_past_decks_drops_results_outside_the_folder():
+    answer = _answer(
+        text="prior campaign. indemnity clause.",
+        references=[
+            _ref(title="Fortis X HT Media", uri=IN_FOLDER, content="prior campaign"),
+            _ref(title="Sample of contract", uri=OUTSIDE, content="indemnity clause"),
+        ],
+        citations=[_cite(0, 16, ["0"]), _cite(17, 34, ["1"])],
+    )
     with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=ALLOWED), \
          patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "_log_retrieval") as log, \
-         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": MagicMock()}):
-        from google.cloud import discoveryengine_v1 as de
-        de.SearchServiceClient.return_value.search.return_value = [hit_ok, hit_bad]
+         _fake_discoveryengine(answer):
         result = research.search_past_decks("fortis", "b1")
 
     titles = [r["title"] for r in result["results"]]
     assert titles == ["Fortis X HT Media"]
     assert "Sample of contract" not in titles
     assert log.call_args.kwargs["filtered_out"] == 1
+    # The filtered deck must not leak back in as an attributed claim either.
+    assert [f["claim"] for f in result["findings"]] == ["prior campaign."]
+
+
+def test_past_decks_never_reports_a_claim_without_a_source():
+    """The grounding invariant: an uncitable span is dropped, not shown bare."""
+    answer = _answer(
+        text="A sourced claim. An unsourced claim.",
+        references=[_ref()],
+        citations=[_cite(0, 17, ["0"]), _cite(18, 36, [])],
+    )
+    with _past_decks_configured(), \
+         patch.object(research, "_log_retrieval"), \
+         _fake_discoveryengine(answer):
+        result = research.search_past_decks("acme", "b")
+
+    assert [f["claim"] for f in result["findings"]] == ["A sourced claim."]
+
+
+def test_past_decks_slices_claims_on_byte_offsets_not_characters():
+    """Citation offsets are UTF-8 byte positions; slicing the str mangles them."""
+    text = "Reach ₹500 crore readers."
+    end = len(text.encode("utf-8"))
+    answer = _answer(text=text, references=[_ref()], citations=[_cite(0, end, ["0"])])
+    with _past_decks_configured(), \
+         patch.object(research, "_log_retrieval"), \
+         _fake_discoveryengine(answer):
+        result = research.search_past_decks("acme", "b")
+
+    assert result["findings"][0]["claim"] == text
 
 
 def test_past_decks_retries_once_on_a_transient_failure():
     """A momentary network blip must not be reported as an unreachable corpus."""
     from google.api_core import exceptions as api_exceptions
 
-    de = MagicMock()
-    client = de.SearchServiceClient.return_value
-    client.search.side_effect = [
-        api_exceptions.ServiceUnavailable("dns hiccup"),
-        [],  # second attempt succeeds
-    ]
-    with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval") as log, \
          patch.object(research.time, "sleep"), \
-         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": de}):
+         _fake_discoveryengine() as module:
+        client = module.ConversationalSearchServiceClient.return_value
+        client.answer_query.side_effect = [
+            api_exceptions.ServiceUnavailable("dns hiccup"),
+            MagicMock(answer=_answer()),  # second attempt succeeds
+        ]
         result = research.search_past_decks("fortis", "b1")
 
-    assert client.search.call_count == 2
+    assert client.answer_query.call_count == 2
     assert "error" not in result
     assert log.call_args[0][2] == "no_results"
 
@@ -755,18 +812,41 @@ def test_past_decks_retries_once_on_a_transient_failure():
 def test_past_decks_gives_up_after_the_second_transient_failure():
     from google.api_core import exceptions as api_exceptions
 
-    de = MagicMock()
-    de.SearchServiceClient.return_value.search.side_effect = \
-        api_exceptions.ServiceUnavailable("still down")
-    with patch.object(research, "PAST_DECKS_ENGINE", "ds"), \
-         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
-         patch.object(research, "_past_deck_file_ids", return_value=frozenset()), \
-         patch.object(research, "get_credentials", return_value=None), \
+    with _past_decks_configured(), \
          patch.object(research, "_log_retrieval") as log, \
          patch.object(research.time, "sleep"), \
-         patch.dict("sys.modules", {"google.cloud.discoveryengine_v1": de}):
+         _fake_discoveryengine(
+             error=api_exceptions.ServiceUnavailable("still down")) as module:
         result = research.search_past_decks("fortis", "b1")
 
-    assert de.SearchServiceClient.return_value.search.call_count == 2
+    client = module.ConversationalSearchServiceClient.return_value
+    assert client.answer_query.call_count == 2
     assert "error" in result
     assert log.call_args[0][2] == "error"
+
+
+@pytest.mark.parametrize("configured,expected", [
+    ("a,b", ("a", "b")),
+    (" a , b ", ("a", "b")),
+    ("a", ("a",)),
+    ("a,,b", ("a", "b")),
+    ("", ()),
+])
+def test_past_decks_folders_parses_a_comma_separated_allow_list(configured, expected):
+    with patch.object(research, "PAST_DECKS_FOLDER_ID", configured):
+        assert research._past_decks_folders() == expected
+
+
+def test_past_deck_file_ids_collects_from_every_configured_folder():
+    """Both folders hold the same decks; the connector returns either copy."""
+    drive = MagicMock()
+    drive.files.return_value.list.return_value.execute.side_effect = [
+        {"files": [{"id": "one"}]},
+        {"files": [{"id": "two"}]},
+    ]
+    research._past_deck_file_ids.cache_clear()
+    with patch.object(research, "PAST_DECKS_FOLDER_ID", "folderA,folderB"), \
+         patch.object(research, "get_credentials", return_value=None), \
+         patch("googleapiclient.discovery.build", return_value=drive):
+        assert research._past_deck_file_ids() == frozenset({"one", "two"})
+    research._past_deck_file_ids.cache_clear()

@@ -36,6 +36,8 @@ from ..oauth_creds import get_credentials
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+# Separate from LOCATION: Gemini 3.x is served only from `global` here.
+MODEL_LOCATION = os.environ.get("MODEL_LOCATION", LOCATION)
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
 # Searched through the Gemini Enterprise app, not the data store directly:
@@ -43,7 +45,14 @@ RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
 # building an index, and that path is served by the app's serving config.
 PAST_DECKS_ENGINE = os.environ.get("PAST_DECKS_ENGINE", "")
 PAST_DECKS_LOCATION = os.environ.get("PAST_DECKS_LOCATION", "us")
+# Comma-separated: the same decks live in more than one folder (an original
+# and a working copy), and the connector returns whichever copy Drive's index
+# prefers. Allow-listing only one silently drops about half the corpus.
 PAST_DECKS_FOLDER_ID = os.environ.get("PAST_DECKS_FOLDER_ID", "")
+
+
+def _past_decks_folders() -> tuple[str, ...]:
+    return tuple(f.strip() for f in PAST_DECKS_FOLDER_ID.split(",") if f.strip())
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
 _USER_AGENT = "Mozilla/5.0 (compatible; HT-SolutioningAgent/1.0)"
@@ -104,7 +113,7 @@ def search_web(query: str, brief_id: str) -> dict:
     """Search the open web for brand, campaign, competitor and social activity.
 
     Covers public posts on LinkedIn, Instagram, X and Facebook as well as news
-    and brand sites, since Google indexes them — there is no separate social
+    and brand sites, since Google indexes them. There is no separate social
     tool and no scraping.
 
     Args:
@@ -121,7 +130,7 @@ def search_web(query: str, brief_id: str) -> dict:
         from google import genai
         from google.genai import types
 
-        client = genai.Client(vertexai=True, project=PROJECT, location=LOCATION)
+        client = genai.Client(vertexai=True, project=PROJECT, location=MODEL_LOCATION)
         resp = client.models.generate_content(
             model=RESEARCH_MODEL,
             contents=query,
@@ -191,17 +200,19 @@ def _past_deck_file_ids() -> frozenset[str]:
     from googleapiclient.discovery import build
 
     drive = build("drive", "v3", credentials=get_credentials())
-    ids, page = set(), None
-    while True:
-        resp = drive.files().list(
-            q=f"'{PAST_DECKS_FOLDER_ID}' in parents and trashed=false",
-            fields="nextPageToken, files(id)", pageSize=200, pageToken=page,
-            supportsAllDrives=True, includeItemsFromAllDrives=True,
-        ).execute()
-        ids.update(f["id"] for f in resp.get("files", []))
-        page = resp.get("nextPageToken")
-        if not page:
-            break
+    ids = set()
+    for folder in _past_decks_folders():
+        page = None
+        while True:
+            resp = drive.files().list(
+                q=f"'{folder}' in parents and trashed=false",
+                fields="nextPageToken, files(id)", pageSize=200, pageToken=page,
+                supportsAllDrives=True, includeItemsFromAllDrives=True,
+            ).execute()
+            ids.update(f["id"] for f in resp.get("files", []))
+            page = resp.get("nextPageToken")
+            if not page:
+                break
     return frozenset(ids)
 
 
@@ -220,17 +231,26 @@ def _in_past_decks_folder(allowed: frozenset[str], *candidates: str) -> bool:
     return False
 
 
+_MARKUP_RE = re.compile(r"</?b>")
+
+
+def _clean_snippet(text: str) -> str:
+    """Retrieved chunks arrive with <b> match markup and HTML entities."""
+    return html.unescape(_MARKUP_RE.sub("", text or "")).strip()
+
+
 def search_past_decks(query: str, brief_id: str) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 
     Args:
-        query: what to look for — a client, an industry, a campaign type.
+        query: what to look for: a client, an industry, a campaign type.
         brief_id: the brief this research belongs to; pass "" for ad-hoc
             research not tied to a brief.
 
     Returns:
-        matching past decks with a snippet and a link to the deck itself, or
-        an empty list with a reason when the corpus isn't reachable.
+        `results` (the past decks that matched, each with a link) and
+        `findings`, each a claim paired with the decks it came from. Or an
+        empty list with a reason when the corpus isn't reachable.
     """
     started = time.time()
     missing = [
@@ -247,7 +267,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
                        error=f"not configured: {', '.join(missing)}")
         return {
             "results": [],
-            "error": "The past-decks corpus is not connected yet — say so rather "
+            "error": "The past-decks corpus is not connected yet. Say so rather "
                      "than implying no prior work exists.",
         }
 
@@ -258,7 +278,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
     )
     try:
         from google.api_core import exceptions as api_exceptions
-        from google.cloud import discoveryengine_v1 as discoveryengine
+        from google.cloud import discoveryengine_v1alpha as discoveryengine
 
         # The store is ACL-enabled (Google Identity), so it rejects a service
         # account — search as the shared identity that owns the decks folder.
@@ -267,16 +287,29 @@ def search_past_decks(query: str, brief_id: str) -> dict:
             {"api_endpoint": f"{PAST_DECKS_LOCATION}-discoveryengine.googleapis.com"}
             if PAST_DECKS_LOCATION != "global" else None
         )
-        client = discoveryengine.SearchServiceClient(
+        # answer_query, not search. The Drive connector runs FEDERATED: it
+        # queries Drive live and never builds an index, so SearchService.search
+        # matches nothing and returns 0 results with HTTP 200 and no error —
+        # which reads as "HT has no prior work" rather than "wrong API".
+        # Retrieval only happens inside answer generation. v1alpha, not v1:
+        # v1's answer_query returns "a summary could not be generated" against
+        # this same serving config. Both verified against the live store.
+        client = discoveryengine.ConversationalSearchServiceClient(
             credentials=get_credentials(), client_options=client_options
         )
-        request = discoveryengine.SearchRequest(
+        request = discoveryengine.AnswerQueryRequest(
             serving_config=serving_config,
-            query=query,
-            page_size=8,
-            content_search_spec=discoveryengine.SearchRequest.ContentSearchSpec(
-                snippet_spec=discoveryengine.SearchRequest.ContentSearchSpec.SnippetSpec(
-                    return_snippet=True
+            query=discoveryengine.Query(text=query),
+            answer_generation_spec=(
+                discoveryengine.AnswerQueryRequest.AnswerGenerationSpec(
+                    include_citations=True
+                )
+            ),
+            search_spec=discoveryengine.AnswerQueryRequest.SearchSpec(
+                search_params=(
+                    discoveryengine.AnswerQueryRequest.SearchSpec.SearchParams(
+                        max_return_results=8
+                    )
                 )
             ),
         )
@@ -286,7 +319,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         # exists" rather than "the network blinked".
         for attempt in (1, 2):
             try:
-                pager = client.search(request)
+                answer = client.answer_query(request).answer
                 break
             except (api_exceptions.ServiceUnavailable,
                     api_exceptions.DeadlineExceeded,
@@ -300,29 +333,54 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         return {"results": [], "error": str(exc)[:300]}
 
     allowed = _past_deck_file_ids() if PAST_DECKS_FOLDER_ID else frozenset()
-    results, filtered_out = [], 0
-    for hit in pager:
-        doc = getattr(hit, "document", None)
-        if doc is None:
-            continue
-        data = dict(getattr(doc, "derived_struct_data", {}) or {})
-        link = data.get("link", "")
-        if not _in_past_decks_folder(allowed, link, getattr(doc, "id", "") or ""):
+    # A citation points at a reference by its index in this list, so the
+    # position has to survive filtering — hence a dict keyed by index rather
+    # than a list that would renumber once anything is dropped.
+    sources_by_id: dict[str, dict] = {}
+    decks: dict[str, dict] = {}
+    filtered_out = 0
+    for index, reference in enumerate(getattr(answer, "references", None) or []):
+        chunk = getattr(reference, "chunk_info", None)
+        meta = getattr(chunk, "document_metadata", None)
+        if meta is None:
             filtered_out += 1
             continue
-        snippets = [
-            s.get("snippet", "")
-            for s in data.get("snippets", [])
-            if s.get("snippet")
-        ]
-        results.append(
-            {
-                "title": data.get("title") or getattr(doc, "id", ""),
-                "link": link,
-                "snippet": " ".join(snippets)[:800],
-            }
+        link = getattr(meta, "uri", "") or ""
+        document = getattr(meta, "document", "") or ""
+        if not _in_past_decks_folder(allowed, link, document):
+            filtered_out += 1
+            continue
+        title = getattr(meta, "title", "") or document.rsplit("/", 1)[-1]
+        sources_by_id[str(index)] = {"title": title, "link": link}
+        deck = decks.setdefault(
+            link or title, {"title": title, "link": link, "snippet": ""}
         )
+        snippet = _clean_snippet(getattr(chunk, "content", "") or "")
+        if snippet and snippet not in deck["snippet"]:
+            deck["snippet"] = (deck["snippet"] + " " + snippet).strip()[:800]
 
+    # Citation offsets are byte positions into the UTF-8 answer, not character
+    # positions — slicing the str directly mangles any non-ASCII claim.
+    raw = (getattr(answer, "answer_text", "") or "").encode("utf-8")
+    findings = []
+    for citation in getattr(answer, "citations", None) or []:
+        cited = [
+            sources_by_id[key]
+            for key in (
+                str(getattr(source, "reference_id", ""))
+                for source in (getattr(citation, "sources", None) or [])
+            )
+            if key in sources_by_id
+        ]
+        start = getattr(citation, "start_index", 0) or 0
+        end = getattr(citation, "end_index", 0) or 0
+        claim = raw[start:end].decode("utf-8", "ignore").strip()
+        # Same invariant as search_web: a claim without an attributable
+        # source is dropped, never reported bare.
+        if claim and cited:
+            findings.append({"claim": claim, "sources": cited})
+
+    results = list(decks.values())
     _log_retrieval(
         brief_id,
         "past_decks",
@@ -332,7 +390,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         result_count=len(results),
         filtered_out=filtered_out,
     )
-    return {"results": results}
+    return {"results": results, "findings": findings}
 
 
 def search_youtube(query: str, brief_id: str) -> dict:
@@ -437,7 +495,7 @@ class _TextExtractor(HTMLParser):
 
 
 def fetch_url(url: str, brief_id: str) -> dict:
-    """Read one specific web page — typically the client's own site.
+    """Read one specific web page, typically the client's own site.
 
     Only call this with a url you already have: one from the email thread, or
     one a search result returned. Never guess a domain from a company name.
