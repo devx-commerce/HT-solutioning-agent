@@ -278,6 +278,17 @@ def enforce(deck: dict) -> list[str]:
                             )
                             break
 
+        if layout == "feature-grid":
+            # Checked here because the schema's own error for this field
+            # (it also accepts "bento" and a list) is five lines, four of
+            # them contradicting the real cause.
+            cols = slide.get("columns", 3)
+            if not isinstance(cols, int) or isinstance(cols, bool) or not 2 <= cols <= 4:
+                problems.append(
+                    f"{where}: columns must be the number 2, 3 or 4, not {cols!r}. "
+                    "Use 2 for longer card copy, 3 for shorter."
+                )
+
         if layout == "quote":
             # The layout draws its own curly quotes; the model often adds its
             # own. It also prefixes the attribution with an em dash, and the

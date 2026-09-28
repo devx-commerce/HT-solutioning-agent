@@ -21,7 +21,10 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
+
+import requests
 
 from google.cloud import bigquery
 from googleapiclient.discovery import build
@@ -34,6 +37,10 @@ PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 NODE_BIN = os.environ.get("NODE_BIN", "node")
 RENDER_CLI = os.environ.get("PRESENTATION_MD_CLI", "")
+# The renderer service (renderer/ in this repo, on Cloud Run). When set it is
+# used instead of the local CLI: Agent Engine has no Node, so the deployed
+# agent can only render over HTTP.
+RENDER_URL = os.environ.get("RENDER_URL", "").rstrip("/")
 DECK_FOLDER_ID = os.environ.get("DECK_FOLDER_ID", "")
 DECK_READER_DOMAIN = os.environ.get("DECK_READER_DOMAIN", "")
 
@@ -42,10 +49,25 @@ _PPTX_MIME = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
 _RENDER_TIMEOUT = 120
+_UNAVAILABLE_MSG = (
+    "The rendering service is unavailable, so nothing was published. The deck "
+    "itself was NOT rejected: do not change it. Tell the person the deck could "
+    "not be rendered right now and to ask again in a few minutes"
+)
 
 
 class DeckRenderError(RuntimeError):
-    """presentation-md rejected the deck or failed to render it."""
+    """presentation-md rejected the deck: the deck must change."""
+
+
+class RendererUnavailable(RuntimeError):
+    """The renderer couldn't be reached or failed on its own: the deck is fine."""
+
+
+# Waits between attempts when the renderer is unavailable: a cold start or a
+# brief outage, not a bad deck. Four attempts over about half a minute.
+_RENDER_RETRY_WAITS = (2, 6, 15)
+_RENDER_HTTP_TIMEOUT = 90
 
 
 def _normalize_deck_json(deck_json: str) -> str:
@@ -63,6 +85,67 @@ def _normalize_deck_json(deck_json: str) -> str:
 
 
 def _render_pptx(deck_json: str) -> bytes:
+    """Deck JSON → pptx bytes: the renderer service if configured, else the CLI.
+
+    Raises DeckRenderError when the deck itself is invalid, and
+    RendererUnavailable when rendering couldn't happen at all, so callers can
+    tell the agent whether to change the deck or just try again later.
+    """
+    if RENDER_URL:
+        return _render_via_service(_normalize_deck_json(deck_json))
+    return _render_via_cli(deck_json)
+
+
+def _id_token_headers() -> dict:
+    """An identity token for the private Cloud Run renderer.
+
+    On Agent Engine this comes from the runtime's service account. A local
+    renderer (http://localhost…) needs no token.
+    """
+    if RENDER_URL.startswith("http://localhost") or RENDER_URL.startswith("http://127."):
+        return {}
+    import google.auth.transport.requests
+    from google.oauth2 import id_token
+
+    token = id_token.fetch_id_token(google.auth.transport.requests.Request(), RENDER_URL)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _render_via_service(deck_json: str) -> bytes:
+    last = "no attempt was made"
+    for attempt, wait in enumerate((*_RENDER_RETRY_WAITS, None), start=1):
+        try:
+            resp = requests.post(
+                f"{RENDER_URL}/render",
+                data=deck_json.encode("utf-8"),
+                headers={"content-type": "application/json", **_id_token_headers()},
+                timeout=_RENDER_HTTP_TIMEOUT,
+            )
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last = f"{type(exc).__name__}: {str(exc)[:200]}"
+        except Exception as exc:  # noqa: BLE001 - e.g. no identity token available
+            last = f"{type(exc).__name__}: {str(exc)[:200]}"
+        else:
+            if resp.status_code == 200:
+                return resp.content
+            if resp.status_code in (400, 413, 422):
+                # The deck is wrong. Retrying the same deck can't help.
+                try:
+                    body = resp.json()
+                except ValueError:
+                    body = {}
+                details = body.get("details") or [body.get("message") or resp.text[:500]]
+                raise DeckRenderError(
+                    "Deck JSON is invalid:\n" + "\n".join(f"  - {d}" for d in details)
+                )
+            # 401/403 (not authorised yet), 429, 5xx: the renderer, not the deck.
+            last = f"HTTP {resp.status_code}: {resp.text[:200]}"
+        if wait is not None:
+            time.sleep(wait)
+    raise RendererUnavailable(f"after {len(_RENDER_RETRY_WAITS) + 1} attempts, {last}")
+
+
+def _render_via_cli(deck_json: str) -> bytes:
     """Deck JSON → pptx bytes, via presentation-md's renderer CLI.
 
     The CLI validates against deck.schema.json before rendering, so an
@@ -188,6 +271,8 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
         pptx = _render_pptx(deck_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
         return {"error": f"Deck was not valid, nothing was published: {exc}"}
+    except RendererUnavailable as exc:
+        return {"error": _UNAVAILABLE_MSG + f" ({exc})"}
 
     created = _upload_pptx(
         pptx, name=f"HT Media × {client_name} solution deck", file_id=""
@@ -308,6 +393,8 @@ def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
         pptx = _render_pptx(updated_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
         return {"error": f"Change rejected, the deck is unchanged: {exc}"}
+    except RendererUnavailable as exc:
+        return {"error": _UNAVAILABLE_MSG + f" ({exc})"}
 
     _upload_pptx(pptx, name="", file_id=stored["deck_file_id"])
     _save_brief(brief_id, deck_json=updated_json, status="drafted")

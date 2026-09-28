@@ -113,6 +113,15 @@ def test_brief_and_next_steps_slides_make_their_point_in_an_aside_not_an_image()
     assert any("slide 5 (next-steps) must use an aside" in p for p in problems)
 
 
+@pytest.mark.parametrize("cols", [5, 1, "3", "bento", ["a", "b"], True])
+def test_feature_grid_columns_get_one_clear_message(cols):
+    deck = _deck()
+    deck["slides"][3]["columns"] = cols
+    problems = [p for p in master_deck.enforce(deck) if "columns" in p]
+    assert len(problems) == 1
+    assert "columns must be the number 2, 3 or 4" in problems[0]
+
+
 def test_feature_grid_cards_never_carry_images():
     deck = _deck()
     deck["slides"][3]["cards"][0]["image"] = "placeholder"

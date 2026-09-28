@@ -130,6 +130,10 @@ A deck that breaks a rule is rejected with a "problems" list naming each
 slide and field. Fix all of them in one pass and call build_solution_deck
 again. Never truncate text mid-sentence to fit; rewrite it shorter.
 
+If a deck tool says the rendering service is unavailable, the deck was not
+rejected. Do not change it or try another layout. Say the deck couldn't be
+rendered right now and to ask again in a few minutes.
+
 Ground the deck in what you actually found. A deck should carry at least
 one real cited source: prior HT work or competitor/brand evidence. Do not
 invent statistics, campaign results, or client quotes.
