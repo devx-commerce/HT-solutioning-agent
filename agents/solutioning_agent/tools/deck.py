@@ -303,9 +303,12 @@ def update_deck(brief_id: str, edits_json: str) -> dict:
         brief_id: which brief's deck to change, from build_solution_deck or
             lookup_deck. Never invented.
         edits_json: a JSON array of edits, each
-            {"slide_index": 0-based int, "field": name, "value": new text}.
-            For example: [{"slide_index": 2, "field": "heading",
-            "value": "Festive reach"}].
+            {"slide_index": 0-based int, "field": name, "value": new value}.
+            A text field takes a string. A list field (rows, cards, steps,
+            stats) takes the whole new list: copy it from get_deck_outline
+            and change only what was asked. For example:
+            [{"slide_index": 2, "field": "heading", "value": "Festive reach"}].
+            Every call publishes to the real deck; never send a trial edit.
 
     Returns:
         The deck's link and which edits were applied, or an error naming
@@ -420,6 +423,17 @@ def _load_brief(brief_id: str) -> dict | None:
     return dict(rows[0]) if rows else None
 
 
+def _readable(value):
+    """A slide's content with embedded images and internal tags elided."""
+    if isinstance(value, dict):
+        return {k: _readable(v) for k, v in value.items() if k != "notes"}
+    if isinstance(value, list):
+        return [_readable(v) for v in value]
+    if isinstance(value, str) and value.startswith("data:image/"):
+        return "(embedded image)"
+    return value
+
+
 def get_deck_outline(brief_id: str) -> dict:
     """List what's currently on each slide of a deck, with its index.
 
@@ -431,8 +445,10 @@ def get_deck_outline(brief_id: str) -> dict:
             or lookup_deck.
 
     Returns:
-        Each slide's 0-based index, layout and headline text, or an error if
-        no stored deck exists for that brief.
+        Each slide's 0-based index and its full content (every field,
+        including table rows, cards, steps and stats), or an error if no
+        stored deck exists for that brief. This is the only place to read a
+        deck's content from.
     """
     stored = _load_brief(brief_id)
     if not stored or not stored.get("deck_json"):
@@ -444,13 +460,11 @@ def get_deck_outline(brief_id: str) -> dict:
     return {
         "brief_id": brief_id,
         "link": stored.get("deck_link"),
+        # Full content, not just headings: with only field names the agent
+        # couldn't tell which table row said "Live Hindustan", and made trial
+        # edits against the real deck to find out.
         "slides": [
-            {
-                "slide_index": i,
-                "layout": s.get("layout"),
-                "heading": s.get("heading") or s.get("quote") or "",
-                "fields": sorted(k for k in s if k != "layout"),
-            }
+            {"slide_index": i, **_readable(s)}
             for i, s in enumerate(deck.get("slides") or [])
         ],
     }

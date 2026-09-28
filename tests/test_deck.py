@@ -245,9 +245,27 @@ def test_outline_reports_index_layout_and_heading():
     assert [s["slide_index"] for s in outline["slides"]] == list(range(7))
     assert outline["slides"][6]["layout"] == "closing"
     assert outline["slides"][6]["heading"] == "Thank you"
-    assert "heading" in outline["slides"][0]["fields"]
+    assert outline["slides"][0]["lead"] == "keep me"  # full content, not field names
 
 
 def test_outline_without_a_stored_deck_reports_it():
     with patch.object(deck_tools, "_load_brief", return_value=None):
         assert "error" in deck_tools.get_deck_outline("missing")
+
+
+# --- the outline is the deck's full content --------------------------------
+
+
+def test_outline_carries_every_field_so_a_table_row_can_be_found():
+    deck = json.loads(STORED["deck_json"])
+    deck["slides"][4]["cards"][0]["body"] = "Live Hindustan native content"
+    deck["slides"][1]["image"] = "data:image/png;base64," + "A" * 5000
+    deck["slides"][1]["notes"] = "[why-ht:opener] internal"
+    stored = {**STORED, "deck_json": json.dumps(deck)}
+    with patch.object(deck_tools, "_load_brief", return_value=stored):
+        outline = deck_tools.get_deck_outline("b1")
+    slide = outline["slides"][4]
+    assert slide["cards"][0]["body"] == "Live Hindustan native content"
+    assert outline["slides"][1]["image"] == "(embedded image)"   # no 5 KB blob
+    assert "notes" not in outline["slides"][1]
+    assert outline["slides"][0]["heading"] == "First"
