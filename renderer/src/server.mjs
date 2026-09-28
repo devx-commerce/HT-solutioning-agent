@@ -73,7 +73,7 @@ async function render(deckJson) {
 }
 
 export const server = createServer(async (req, res) => {
-  if (req.method === "GET" && req.url === "/healthz") return send(res, 200, { ok: true });
+  if (req.method === "GET" && req.url === "/health") return send(res, 200, { ok: true });
   if (req.method !== "POST" || req.url !== "/render") return send(res, 404, { error: "not_found" });
   const started = Date.now();
   try {

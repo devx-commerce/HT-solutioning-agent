@@ -25,7 +25,7 @@ MCP code. Three theme files: `ht-media` and the two themes it extends
 | | `422 {"error":"invalid","details":[...]}` the deck is wrong; fix it |
 | | `413` body over 25 MB |
 | | `500 {"error":"render_failed"}` renderer fault, not the deck's |
-| `GET /healthz` | `200 {"ok":true}` |
+| `GET /health` (not `/healthz`: Cloud Run reserves paths ending in "z") | `200 {"ok":true}` |
 
 `deck.py` retries anything that isn't a 200 or a deck error (connection
 errors, timeouts, 401/403, 429, 5xx) four times over about 25 seconds, then
