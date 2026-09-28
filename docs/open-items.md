@@ -108,17 +108,23 @@ being acted on right now.
     proposal" finds the deck). The agent instruction now says to use a
     phrase and retry before concluding there is no prior work.
 
-- **The past decks exist in two Drive folders and both must be
-  allow-listed.** `1W7C53D5nLxFQTX0GuAeaIYWzjuWVr7MO` (working copy) and
-  `1P2dOh60waUoIHgeaoaGE1zYqAiBzM9F_` (the original folder from the first
-  brief) hold the same decks, and the connector returns whichever copy
-  Drive's index prefers. With only the first allow-listed, roughly half
-  the corpus was silently dropped — "Muthoot Finance" retrieved 10 correct
-  references and every one was filtered out, logging `no_results`, which
-  reads as "HT never pitched them". `PAST_DECKS_FOLDER_ID` is now
-  comma-separated. **If decks are ever consolidated into one folder, or a
-  third folder appears, this variable has to be updated** — nothing detects
-  it, and the failure is silent and looks like an empty corpus.
+- **The past decks are in one Drive folder: the solutioning team's
+  original.** `1P2dOh60waUoIHgeaoaGE1zYqAiBzM9F_` ("Past Pitch Decks",
+  owned by ankita.suden@htdigital.in, shared with sales.agent@). Until
+  2026-09-28 there was also a working copy, `1W7C53D5nLxFQTX0GuAeaIYWzjuWVr7MO`
+  ("Past Solution Decks", owned by sales.agent@), made before the original
+  was shared. A file-by-file check on 2026-09-28 found the copy held nothing
+  the original lacks (identical checksums; the original also has the Lulu
+  Mall deck), so the copy was retired and `PAST_DECKS_FOLDER_ID` lists only
+  the original. While both existed, both had to be allow-listed: the
+  connector returns whichever copy Drive's index prefers, and with one
+  folder listed about half the corpus was silently dropped ("Muthoot
+  Finance" retrieved 10 correct references and every one was filtered out,
+  logging `no_results`, which reads as "HT never pitched them").
+  **Two things still aren't detected by anything:** the solutioning team
+  moving decks to a new folder, and them unsharing this one from
+  sales.agent@. Either makes the corpus look empty rather than failing
+  loudly.
 
 - **Does Gemini Enterprise's chat surface forward an uploaded file's bytes
   (or a storage reference) to the agent in a form a tool function can
