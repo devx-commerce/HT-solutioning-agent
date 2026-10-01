@@ -193,3 +193,32 @@ def test_branch_a_query_carries_the_self_filter(monkeypatch):
     query = gmail.users().messages().list.call_args.kwargs["q"]
     assert "-from:me" in query
     assert "-from:sales.agent@hindustantimes.com" in query
+
+
+def test_branch_a_query_excludes_every_listed_internal_sender():
+    gmail = MagicMock()
+    gmail.users().messages().list().execute.return_value = {"messages": []}
+
+    ingestion._list_branch_a(gmail, datetime(2026, 1, 1, tzinfo=timezone.utc))
+
+    query = gmail.users().messages().list.call_args.kwargs["q"]
+    for addr in (
+        "hrtimes@hindustantimes.com",
+        "ithelpdesk@hindustantimes.com",
+        "noreply@darwinbox.in",
+        "digests@darwinbox.in",
+    ):
+        assert f"-from:{addr}" in query.split()
+    # The watermark bound is still there after the added terms.
+    assert "after:" in query
+
+
+def test_a_manually_labelled_email_is_never_sender_filtered():
+    """Branch B is a person's explicit request; it overrides the exclusion list."""
+    gmail = MagicMock()
+    gmail.users().messages().list().execute.return_value = {"messages": []}
+
+    ingestion._list_branch_b(gmail)
+
+    query = gmail.users().messages().list.call_args.kwargs["q"]
+    assert "-from:" not in query

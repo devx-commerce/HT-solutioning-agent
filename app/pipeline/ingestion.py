@@ -49,6 +49,24 @@ _NOISE_FILTER = "-category:promotions -category:social -in:chats"
 _DRY_RUN_REPLY = "[dry-run] https://docs.google.com/presentation/d/DRY-RUN-NO-DECK-BUILT/edit"
 
 
+# Internal senders whose mail is never a client brief (HR, the IT service
+# desk, the HRMS's notifications). Excluded in the Gmail query itself, so they
+# never reach classification. Classification already rejects them (checked
+# against the real inbox 2026-09-25); this saves the model call and keeps
+# them out of the decision log. Branch B is not filtered: a person applying
+# the generate-deck label by hand is an explicit override.
+EXCLUDED_SENDERS = (
+    "hrtimes@hindustantimes.com",
+    "ithelpdesk@hindustantimes.com",
+    "noreply@darwinbox.in",
+    "digests@darwinbox.in",
+)
+
+
+def _sender_filter() -> str:
+    return " ".join(f"-from:{addr}" for addr in EXCLUDED_SENDERS)
+
+
 def _self_filter() -> str:
     """Exclude the agent's own mail from its own sweep.
 
@@ -112,7 +130,7 @@ def _tally(outcome: str, queued: int, rejected: int, skipped: int) -> tuple[int,
 
 def _list_branch_a(gmail, cutoff: datetime) -> list[str]:
     query = (
-        f"in:inbox {_NOISE_FILTER} {_self_filter()} "
+        f"in:inbox {_NOISE_FILTER} {_self_filter()} {_sender_filter()} "
         f"after:{int(cutoff.timestamp())}"
     )
     resp = gmail.users().messages().list(userId="me", q=query).execute()
