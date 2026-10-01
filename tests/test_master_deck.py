@@ -28,6 +28,11 @@ def _deck(**overrides):
             {"layout": "feature-grid", "columns": 3,
              "cards": [{"title": "Print"}, {"title": "Digital"}, {"title": "On-ground"}]},
             {"layout": "timeline", "steps": [{"title": "Tease"}, {"title": "Launch"}, {"title": "Sustain"}]},
+            {"layout": "image-hero", "heading": "The idea", "image": "placeholder", "imageAlt": "A festive market"},
+            {"layout": "two-column", "heading": "Pillar 1", "body": "Canopies.",
+             "image": "placeholder", "imageAlt": "A canopy"},
+            {"layout": "two-column", "heading": "Pillar 2", "body": "Kiranas.",
+             "image": "placeholder", "imageAlt": "A kirana counter"},
             {"layout": "two-column", "heading": "Next steps", "body": "Costing from HT's pricing team.",
              "aside": "Commercials from HT's pricing team."},
             {"layout": "closing", "heading": "Thank you"},
@@ -81,7 +86,17 @@ def test_the_spine_is_enforced_at_both_ends():
 def test_slide_count_is_bounded():
     deck = _deck()
     deck["slides"] = deck["slides"][:2] + deck["slides"][-1:]
-    assert any("must have 7–14" in p for p in master_deck.enforce(deck))
+    assert any("must have 7–20" in p for p in master_deck.enforce(deck))
+
+
+def test_twenty_own_slides_pass_and_twenty_one_do_not():
+    deck = _deck()
+    filler = {"layout": "quote", "quote": "One more idea."}
+    deck["slides"] = deck["slides"][:-2] + [dict(filler) for _ in range(20 - len(deck["slides"]))] + deck["slides"][-2:]
+    assert len(deck["slides"]) == 20
+    assert master_deck.enforce(deck) == []
+    deck["slides"].insert(3, dict(filler))
+    assert any("must have 7–20" in p for p in master_deck.enforce(deck))
 
 
 def test_an_image_the_model_cannot_supply_becomes_a_captioned_placeholder():
@@ -107,10 +122,11 @@ def test_placeholder_captions_do_not_stack_on_re_enforcement():
 
 def test_brief_and_next_steps_slides_make_their_point_in_an_aside_not_an_image():
     deck = _deck()
-    deck["slides"][5].update(image="placeholder", imageAlt="Calendar")
-    deck["slides"][5].pop("aside", None)
+    nxt = len(deck["slides"]) - 2
+    deck["slides"][nxt].update(image="placeholder", imageAlt="Calendar")
+    deck["slides"][nxt].pop("aside", None)
     problems = master_deck.enforce(deck)
-    assert any("slide 5 (next-steps) must use an aside" in p for p in problems)
+    assert any(f"slide {nxt} (next-steps) must use an aside" in p for p in problems)
 
 
 @pytest.mark.parametrize("cols", [5, 1, "3", "bento", ["a", "b"], True])
@@ -188,7 +204,7 @@ def test_the_agent_instruction_is_generated_from_the_enforced_limits():
 
 @pytest.fixture(autouse=True)
 def _no_drive_logo():
-    with patch.object(why_ht, "_logo_data_uri", return_value=None):
+    with patch.object(why_ht.visuals, "ht_logo", return_value=None):
         yield
 
 
@@ -229,7 +245,7 @@ def test_every_why_ht_slide_passes_the_master_deck_rules():
     why_ht.insert(deck, ["english-print", "delhi-ncr"])
     assert master_deck.enforce(deck) == []
     why_ht.insert(deck, ["hindi-heartland", "digital"])
-    # the module doesn't count against the 14-slide limit either
+    # the module doesn't count against the slide limit either
     assert master_deck.enforce(deck) == []
 
 
@@ -257,7 +273,7 @@ def test_add_why_ht_slides_republishes_in_place():
 
     assert result["why_ht_slides"] == ["opener", "scale", "english-print"]
     assert upload.call_args.kwargs["file_id"] == "file-123"
-    assert len(json.loads(saved["deck_json"])["slides"]) == 10
+    assert len(json.loads(saved["deck_json"])["slides"]) == len(_deck()["slides"]) + 3
 
 
 def test_an_unknown_variant_changes_nothing():
@@ -276,3 +292,87 @@ def test_build_rejects_a_deck_off_the_spine_before_rendering():
         result = deck_tools.build_solution_deck(json.dumps(deck), "Acme", "b1")
     assert result["problems"]
     render.assert_not_called()
+
+
+
+# --- feature-grid shape and first-draft rules -----------------------------------
+
+
+def _grid(n, columns=None, title="Card"):
+    slide = {"layout": "feature-grid", "heading": "Pillars",
+             "cards": [{"title": f"{title} {i}"} for i in range(n)]}
+    if columns is not None:
+        slide["columns"] = columns
+    return slide
+
+
+@pytest.mark.parametrize("n, given, expected", [
+    (4, None, 2), (4, 3, 2), (4, 4, 4), (3, None, 3), (3, 2, 3),
+    (6, None, 3), (6, 4, 3), (6, 2, 2), (2, 3, 2),
+])
+def test_grid_columns_are_set_so_every_row_is_full(n, given, expected):
+    """The Rapido deck's 4 pillars in the default 3 columns left one card alone."""
+    deck = _deck()
+    deck["slides"][3] = _grid(n, given)
+    assert master_deck.enforce(deck) == []
+    assert deck["slides"][3]["columns"] == expected
+
+
+def test_five_cards_are_rejected_on_a_first_draft_but_never_block_a_revision():
+    deck = _deck()
+    deck["slides"][3] = _grid(5)
+    assert master_deck.enforce(deck) == []
+    assert any("5 cards can't fill every row" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_a_card_title_that_would_wrap_in_three_columns_is_rejected_on_a_first_draft():
+    deck = _deck()
+    deck["slides"][3] = _grid(3, 3, title="Interactive Commute Dashb")  # 27 chars with the index
+    master_deck.enforce(deck)
+    problems = master_deck.first_draft_problems(deck)
+    assert any("title must fit one line" in p and "limit is 26" in p for p in problems)
+    deck["slides"][3] = _grid(4, 2, title="Interactive Commute Dashboard")
+    master_deck.enforce(deck)
+    assert master_deck.first_draft_problems(deck) == []
+
+
+def test_a_first_draft_needs_three_pictured_slides():
+    deck = _deck()
+    master_deck.enforce(deck)
+    assert master_deck.first_draft_problems(deck) == []
+    deck["slides"][7].pop("image")
+    deck["slides"][7]["aside"] = "Kiranas."
+    problems = master_deck.first_draft_problems(deck)
+    assert any("2 slides with an image" in p and "at least 3" in p for p in problems)
+
+
+def test_why_ht_logo_slots_do_not_count_toward_the_image_minimum():
+    deck = _deck()
+    for i in (7, 6):
+        deck["slides"][i].pop("image")
+        deck["slides"][i]["aside"] = "x"
+    why_ht.insert(deck, [])
+    master_deck.enforce(deck)
+    assert any("1 slides with an image" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_build_rejects_a_first_draft_short_of_images_before_rendering():
+    deck = _deck()
+    deck["slides"] = [s for s in deck["slides"] if s.get("layout") != "image-hero"]
+    with patch.object(deck_tools, "_render_pptx") as render:
+        result = deck_tools.build_solution_deck(json.dumps(deck), "Acme", "b1")
+    render.assert_not_called()
+    assert any("at least 3" in p for p in result["problems"])
+
+
+def test_a_revision_of_a_deck_with_no_images_is_still_allowed():
+    """Decks built before the image minimum must stay editable."""
+    old = _deck()
+    old["slides"] = [s for s in old["slides"] if not s.get("image")]
+    stored = {"deck_json": json.dumps(old), "deck_file_id": "f1", "deck_link": "L", "client_name": "Acme"}
+    with patch.object(deck_tools, "_load_brief", return_value=stored), \
+         patch.object(deck_tools, "_render_pptx", return_value=b"pptx"), \
+         patch.object(deck_tools, "_upload_pptx"), \
+         patch.object(deck_tools, "_save_brief"):
+        result = deck_tools.update_deck("b1", json.dumps([{"slide_index": 2, "field": "quote", "value": "New."}]))
+    assert result.get("edits_applied") == ["slide 2: quote"]

@@ -33,6 +33,7 @@ from html.parser import HTMLParser
 from google.cloud import bigquery
 
 from ..oauth_creds import get_credentials
+from . import source_policy
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -179,7 +180,7 @@ def search_web(query: str, brief_id: str) -> dict:
             resp = client.models.generate_content(
                 model=RESEARCH_MODEL, contents=query, config=config
             )
-            findings, meta, unresolved = _grounded_findings(resp)
+            findings, meta, unresolved, blocked = _grounded_findings(resp)
             if findings:
                 break
     except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
@@ -198,6 +199,7 @@ def search_web(query: str, brief_id: str) -> dict:
         searches_run=searches,
         attempts=attempt,
         unresolved_sources=unresolved,
+        competitor_sources_dropped=blocked,
         source_urls=_urls_in(findings, "url"),
     )
     return {"findings": findings, "searches_run": searches}
@@ -208,11 +210,12 @@ def _urls_in(findings: list[dict], key: str) -> list[str]:
     return sorted({s[key] for f in findings for s in f["sources"] if s.get(key)})
 
 
-def _grounded_findings(resp) -> tuple[list[dict], object, int]:
+def _grounded_findings(resp) -> tuple[list[dict], object, int, int]:
     """Claims from a grounded response, each with the resolved urls it rests on.
 
-    Returns the findings, the grounding metadata, and how many sources were
-    dropped for having no resolvable url.
+    Returns the findings, the grounding metadata, how many sources were
+    dropped for having no resolvable url, and how many for being on a
+    competitor's domain (see source_policy).
     """
     candidate = resp.candidates[0] if resp.candidates else None
     meta = getattr(candidate, "grounding_metadata", None) if candidate else None
@@ -223,6 +226,14 @@ def _grounded_findings(resp) -> tuple[list[dict], object, int]:
         [c.web.uri for c in chunks if getattr(c, "web", None) and c.web.uri]
     )
     unresolved = sum(1 for url in resolved.values() if not url)
+    # Checked on the resolved url: the redirect link names no publisher.
+    # Treated exactly like an unresolvable source, so a claim resting only on
+    # a competitor goes with it.
+    blocked = 0
+    for uri, url in resolved.items():
+        if url and source_policy.is_blocked(url):
+            resolved[uri] = None
+            blocked += 1
 
     def _sources_for(indices) -> list[dict]:
         out, seen = [], set()
@@ -243,7 +254,7 @@ def _grounded_findings(resp) -> tuple[list[dict], object, int]:
         # A claim whose every source failed to resolve goes with them.
         if claim and sources:
             findings.append({"claim": claim, "sources": sources})
-    return findings, meta, unresolved
+    return findings, meta, unresolved, blocked
 
 
 @functools.lru_cache(maxsize=1)

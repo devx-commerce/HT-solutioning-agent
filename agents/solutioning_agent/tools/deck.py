@@ -31,7 +31,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from ..oauth_creds import get_credentials
-from . import master_deck, why_ht
+from . import master_deck, visuals, why_ht
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -239,8 +239,14 @@ def _save_brief(brief_id: str, **fields) -> None:
     ).result()
 
 
-def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict:
+def build_solution_deck(
+    deck_json: str, client_name: str, brief_id: str, client_website: str = ""
+) -> dict:
     """Render a deck from Deck JSON and publish it as Google Slides.
+
+    HT's and the client's logos are added to the cover, and every image slot
+    is filled with a picture generated from its imageAlt description. Either
+    falls back to a captioned placeholder when it can't be done.
 
     Args:
         deck_json: the complete deck as JSON, matching presentation-md's
@@ -248,10 +254,14 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
         client_name: who the deck is for; used to name the file.
         brief_id: the brief this deck belongs to. Pass "" when there isn't
             one and the deck's own file id becomes the brief id.
+        client_website: the client's official homepage, exactly as the email
+            thread or a search result gave it, for their logo. Pass "" when
+            you couldn't establish it; never guess a domain.
 
     Returns:
-        The deck's brief_id, file id and link, or an error explaining what
-        the deck schema rejected.
+        The deck's brief_id, file id and link, and which logos and images
+        are real rather than placeholders; or an error explaining what the
+        deck schema rejected.
     """
     # Normalize before both rendering and storing, so the stored copy is
     # always strictly parseable by a later update_deck.
@@ -259,13 +269,25 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
         deck = json.loads(_normalize_deck_json(deck_json))
     except json.JSONDecodeError as exc:
         return {"error": f"Deck JSON could not be parsed, nothing was published: {exc}"}
-    problems = master_deck.enforce(deck)
+    problems = master_deck.enforce(deck) + master_deck.first_draft_problems(deck)
     if problems:
         return {
             "error": "The deck breaks the HT master deck rules, nothing was "
             "published. Fix every item and call build_solution_deck again.",
             "problems": problems,
         }
+    # Only once the deck passes the rules: a rejected deck shouldn't pay for
+    # images it will be resubmitted with anyway. Pictures are never a reason
+    # not to publish: if this fails outright, the deck ships with whatever
+    # placeholders it has.
+    try:
+        pictures = {
+            **visuals.add_cover_logos(deck, client_name, client_website),
+            "images": visuals.fill_images(deck),
+        }
+    except Exception:  # noqa: BLE001
+        visuals.log.exception("visuals.failed")
+        pictures = {"pictures_error": "logos and images could not be added"}
     deck_json = json.dumps(deck)
     try:
         pptx = _render_pptx(deck_json)
@@ -290,7 +312,7 @@ def build_solution_deck(deck_json: str, client_name: str, brief_id: str) -> dict
         deck_link=link,
         deck_json=deck_json,
     )
-    return {"brief_id": resolved_brief, "deck_id": deck_id, "link": link}
+    return {"brief_id": resolved_brief, "deck_id": deck_id, "link": link, **pictures}
 
 
 def update_deck(brief_id: str, edits_json: str) -> dict:
@@ -391,6 +413,9 @@ def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
             "is unchanged.",
             "problems": problems,
         }
+    # No logo lookup or image generation here: a revision changes exactly
+    # the fields it names, and the pictures from the build are already in
+    # the stored deck.
     updated_json = json.dumps(deck)
     try:
         pptx = _render_pptx(updated_json)

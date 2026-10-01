@@ -12,18 +12,46 @@ being acted on right now.
   only if the client asks. Vendor not yet identified.
 - **Salesforce integration** (account/opportunity/conversation history, also
   named in the SOW). Tertiary, same as above.
-- **AI image generation in decks.** No SOW basis for this at all. If picked
-  up later: gate on "only if no real brand/client asset exists," fixed
-  aspect-ratio/resolution enum enforced by the tool call (not model-chosen
-  dimensions), no text baked into the image.
-- **Client/HT brand asset lookup** (logo fetch by domain, HT's own fixed
-  brand assets). Designed conceptually — domain-based logo API with a
-  favicon fallback, "don't guess" if nothing resolves — but not built. Not
-  required for the first working demo.
+- ~~AI image generation in decks~~ and ~~client/HT logo lookup~~: built
+  2026-10-01 in `tools/visuals.py` (HT confirmed generated images are fine
+  for generic deck use). See "Unverified until credentials are restored"
+  below.
 - **User-uploaded image → attach to a specific slide** (someone hands the
   agent an icon/logo mid-chat and asks it to place it). Fits the existing
   patch-and-reupload revision pipeline conceptually, but depends on an
   unconfirmed platform capability — see the open question below.
+
+## Needs HT to confirm
+
+- **Competitor publications excluded from research** (`tools/source_policy.py`,
+  assumed 2026-10-01, not confirmed by HT). Web findings whose only sources
+  are on these domains are dropped, and the agent is told not to name them:
+  - Times Group: indiatimes.com (TOI, ET, ET BrandEquity, Navbharat Times),
+    timesofindia.com, economictimes.com, maharashtratimes.com
+  - Dainik Jagran (jagran.com), Dainik Bhaskar (bhaskar.com,
+    divyabhaskar.co.in), Amar Ujala (amarujala.com)
+  - The Indian Express (indianexpress.com), The Hindu (thehindu.com), The
+    Tribune (tribuneindia.com)
+
+  Deliberately **not** on it, pending HT's view: sister titles of the above
+  (Financial Express, Jansatta, The Hindu BusinessLine, Mid-day, Naidunia),
+  Business Standard, NDTV, and TV news sites. Why it matters: the Rapido
+  deck of 2026-09-28 cited ET/BrandEquity five times and TOI once, the TOI
+  link backing a stat-row figure.
+
+## Unverified until credentials are restored
+
+Built and unit-tested on 2026-10-01 while local application-default
+credentials had expired, so these have not run against the live project:
+- ~~Image generation~~: verified live 2026-10-01 on `gemini-2.5-flash-image`
+  (global). No Imagen model, 3.0 or 4.0, is reachable in this project.
+- ~~HT logo from the asset folder~~: verified live 2026-10-01.
+- **Client logo lookup** was run live from a laptop against ten past
+  clients' sites: Rapido, Fortis and Nissan resolved correctly; Tata
+  Sampann (timeout), Nestlé (403 to bots), Muthoot (WebP only), Lulu, AMD,
+  Signify, Harvest Gold and Agilus (SVG-only or no marked logo) fall back
+  to the placeholder. SVG/WebP support would raise the hit rate; it needs a
+  rasteriser, which nothing in the agent package has.
 
 ## Open questions (need an answer, not yet answered)
 
@@ -229,7 +257,11 @@ disabling it. Supersede it with a new version instead.
 
 ## Ideas not yet designed
 
-- **Sender blacklist for ingestion.** Certain senders (HR, IT service desk,
+- ~~Sender blacklist for ingestion~~: built 2026-10-01 as
+  `ingestion.EXCLUDED_SENDERS` (HR, IT help desk, Darwinbox), excluded in
+  the Branch A Gmail query; Branch B (manual label) is never filtered. Notes
+  from before it was built:
+  **Sender blacklist for ingestion.** Certain senders (HR, IT service desk,
   internal newsletters) should never reach classification — filtered at
   intake, before the Gemini call. Worth knowing before building it:
   classification already *rejects* these correctly (checked against the real
@@ -245,3 +277,5 @@ disabling it. Supersede it with a new version instead.
 
 - 2026-09-25: file created, seeded from items deprioritized during the
   research/rendering planning conversation.
+- 2026-10-01: competitor source list, unverified-live items; image
+  generation, logos and the sender exclusion list moved to built.

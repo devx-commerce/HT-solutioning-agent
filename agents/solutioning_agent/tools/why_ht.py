@@ -19,10 +19,9 @@ them; `SOURCES` records where each slide came from.
 
 from __future__ import annotations
 
-import base64
 import copy
-import functools
-import os
+
+from . import visuals
 
 # Marks a slide as part of this module, so re-inserting replaces it rather than
 # duplicating it. Kept in speaker notes, which the renderer carries into the
@@ -125,36 +124,6 @@ _SLIDES: dict[str, dict] = {
 }
 
 
-@functools.lru_cache(maxsize=1)
-def _logo_data_uri() -> str | None:
-    """The HT logo from the brand asset folder in Drive, as an embeddable image.
-
-    None when the folder isn't configured or unreachable; the opener then
-    shows a captioned placeholder instead of failing the insert.
-    """
-    folder = os.environ.get("HT_ASSETS_FOLDER_ID", "")
-    if not folder:
-        return None
-    try:
-        from googleapiclient.discovery import build
-
-        from ..oauth_creds import get_credentials
-
-        drive = build("drive", "v3", credentials=get_credentials())
-        files = drive.files().list(
-            q=f"'{folder}' in parents and trashed=false and mimeType contains 'image/'",
-            fields="files(id,name,mimeType)", pageSize=50,
-            supportsAllDrives=True, includeItemsFromAllDrives=True,
-        ).execute().get("files", [])
-        logo = next((f for f in files if "logo" in f["name"].lower()), None)
-        if logo is None:
-            return None
-        data = drive.files().get_media(fileId=logo["id"]).execute()
-        return f"data:{logo['mimeType']};base64,{base64.b64encode(data).decode('ascii')}"
-    except Exception:  # noqa: BLE001 - a missing logo must not block the slides
-        return None
-
-
 def slides_for(variants: list[str]) -> tuple[list[dict], list[str]]:
     """The module's slides for the chosen market variants, and any unknown ones.
 
@@ -174,7 +143,7 @@ def slides_for(variants: list[str]) -> tuple[list[dict], list[str]]:
         slide = copy.deepcopy(_SLIDES[key])
         slide["notes"] = f"{TAG.format(key=key)} Source deck: {SOURCES[key]}."
         if key == "opener":
-            slide["image"] = _logo_data_uri() or "placeholder"
+            slide["image"] = visuals.ht_logo() or "placeholder"
             # The frame isn't square; cropping to fill would cut into the roundel.
             slide["imageFit"] = "contain"
         slides.append(slide)

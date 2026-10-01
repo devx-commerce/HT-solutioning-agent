@@ -24,9 +24,16 @@ THEME = "ht-media"
 # and a caption saying what belongs there. Swap in real images (or generated
 # ones) later by replacing the value; nothing else changes.
 PLACEHOLDER_PREFIX = "placeholder://"
+# The caption a placeholder gets when the model described nothing; there is
+# nothing to generate an image from.
+DEFAULT_CAPTION = "image to be added"
 
 MIN_SLIDES = 7
-MAX_SLIDES = 14
+MAX_SLIDES = 20
+# A first draft needs at least this many pictures (generated at build time).
+# Checked only when a deck is built, never on a revision, so decks built
+# before the rule existed stay editable.
+MIN_IMAGES = 3
 
 
 @dataclass(frozen=True)
@@ -73,7 +80,9 @@ LAYOUTS: dict[str, LayoutRule] = {
     ),
     "feature-grid": LayoutRule(
         use_for="Parallel items of equal weight: campaign pillars, deliverables, "
-        "platforms. 2 columns for 2–4 cards with longer copy, 3 for 3–6 cards. "
+        "platforms. 2, 3, 4 or 6 cards, never 5, so every row is full: 2 cards "
+        "and 4 cards in 2 columns, 3 and 6 cards in 3 columns. Each card title "
+        "fits one line: at most 26 characters in 3 columns. "
         "Text only: an image inside a small card can't be seen, so give it its "
         "own two-column or image-hero slide.",
         text={"eyebrow": 40, "heading": 75},
@@ -134,13 +143,21 @@ LAYOUTS: dict[str, LayoutRule] = {
 # Cells in a data-table are short by nature; one limit covers them all.
 _TABLE_CELL_MAX = 45
 
+# feature-grid: the columns that fill every row for each card count. The
+# first is used when the deck doesn't say. 4 cards in 3 columns leaves one
+# card alone on the second row, which reads as a mistake.
+_GRID_COLUMNS = {2: (2,), 3: (3,), 4: (2, 4), 6: (3, 2)}
+# The widest card title that stays on one line at each column count. In a
+# row where one title wraps and the others don't, the bodies misalign.
+_CARD_TITLE_MAX = {2: 40, 3: 26, 4: 18}
+
 # Position rules. Middle slides use any approved layout except these.
 _FIRST, _SECOND, _LAST = "title", "two-column", "closing"
 _ENDS_ONLY = {"title", "closing"}
 
 
 def _placeholder(ratio: str, caption: str) -> tuple[str, str]:
-    caption = (caption or "").strip() or "image to be added"
+    caption = (caption or "").strip() or DEFAULT_CAPTION
     return (
         f"{PLACEHOLDER_PREFIX}{ratio}",
         f"Image placeholder ({ratio}): {caption}",
@@ -282,12 +299,20 @@ def enforce(deck: dict) -> list[str]:
             # Checked here because the schema's own error for this field
             # (it also accepts "bento" and a list) is five lines, four of
             # them contradicting the real cause.
+            cards = slide.get("cards") if isinstance(slide.get("cards"), list) else []
+            fits = _GRID_COLUMNS.get(len(cards))
             cols = slide.get("columns", 3)
             if not isinstance(cols, int) or isinstance(cols, bool) or not 2 <= cols <= 4:
                 problems.append(
                     f"{where}: columns must be the number 2, 3 or 4, not {cols!r}. "
                     "Use 2 for longer card copy, 3 for shorter."
                 )
+            elif fits and cols not in fits:
+                # Not judgement, just arithmetic, so it's fixed rather than
+                # rejected; that also mends decks built before this rule.
+                slide["columns"] = fits[0]
+            elif fits and "columns" not in slide:
+                slide["columns"] = fits[0]
 
         if layout == "quote":
             # The layout draws its own curly quotes; the model often adds its
@@ -330,6 +355,54 @@ def enforce(deck: dict) -> list[str]:
     return problems
 
 
+def _is_module_slide(slide) -> bool:
+    return isinstance(slide, dict) and str(slide.get("notes", "")).startswith("[why-ht:")
+
+
+def first_draft_problems(deck: dict) -> list[str]:
+    """Rules only a newly built deck must meet, on top of enforce().
+
+    Kept out of enforce() because enforce() also guards every revision, and
+    a deck built before a rule existed must stay editable.
+    """
+    problems = []
+    for i, slide in enumerate(deck.get("slides") or []):
+        if not isinstance(slide, dict) or slide.get("layout") != "feature-grid":
+            continue
+        cards = slide.get("cards") if isinstance(slide.get("cards"), list) else []
+        if cards and len(cards) not in _GRID_COLUMNS:
+            problems.append(
+                f"slide {i} (feature-grid): {len(cards)} cards can't fill every "
+                "row. Use 2, 3, 4 or 6 cards, or split them across two slides."
+            )
+            continue
+        cols = slide.get("columns")
+        limit = _CARD_TITLE_MAX.get(cols, 40) if isinstance(cols, int) else 40
+        for j, card in enumerate(cards):
+            title = card.get("title") if isinstance(card, dict) else None
+            if isinstance(title, str) and len(title) > limit:
+                problems.append(
+                    f"slide {i} (feature-grid): cards[{j}].title is {len(title)} "
+                    f"characters; in {cols} columns a title must fit one line, "
+                    f"so the limit is {limit}. Shorten it."
+                )
+
+    pictured = [
+        i for i, s in enumerate(deck.get("slides") or [])
+        if isinstance(s, dict) and not _is_module_slide(s)
+        and s.get("layout") in ("two-column", "image-hero") and s.get("image")
+    ]
+    if len(pictured) < MIN_IMAGES:
+        problems.append(
+            f"The deck has {len(pictured)} slides with an image; a first draft "
+            f"needs at least {MIN_IMAGES}. Give the big idea an image-hero and "
+            "each custom solution's concept slide an image (two-column with "
+            '"image": "placeholder" and a description in imageAlt). The brief '
+            "and next-steps slides keep their aside."
+        )
+    return problems
+
+
 def describe_for_agent() -> str:
     """The master-deck rules as prose, for the agent's instruction."""
     lines = [
@@ -339,8 +412,9 @@ def describe_for_agent() -> str:
         "hardest requirement as the aside.",
         "  (If the Why HT slides are added, they go here, straight after the brief.)",
         "  3…n. the solution, built only from the approved layouts below. Typically "
-        "the insight, the big idea (quote or image-hero), the pillars (feature-grid), "
-        "the plan (timeline or data-table), and prior HT work with its source when "
+        "the insight, the big idea (quote or image-hero), an overview of the "
+        "solution's components (feature-grid), then each component in turn, the "
+        "plan (timeline or data-table), and prior HT work with its source when "
         "search_past_decks found any.",
         "  n+1. two-column: next steps and commercials, with an aside. Never invent "
         "prices; say costing will be shared by HT's pricing team.",
@@ -366,9 +440,15 @@ def describe_for_agent() -> str:
         "",
         "Images: only two-column (the right half, 12:13) and image-hero (full "
         "slide, 16:9) take one, plus logo-wall cards for logos. Never put an "
-        "image inside a feature-grid card; give it its own slide. You cannot "
-        "supply image files, so set \"image\": \"placeholder\" and write in "
-        "imageAlt what the image should show; it renders as a captioned "
-        "placeholder. Never write an image URL.",
+        "image inside a feature-grid card; give it its own slide. Set "
+        "\"image\": \"placeholder\" and describe the picture in imageAlt: "
+        "an image is generated from that description when the deck is built. "
+        "Describe a concrete scene in an Indian setting (who, where, what is "
+        "happening, the mood), for example \"Homemakers watching a street "
+        "theatre troupe perform at a busy weekly haat in a small UP town\". "
+        "Generic scenes and mock-ups (a sample newspaper page, a branded "
+        "canopy) are fine. A first draft needs at least "
+        f"{MIN_IMAGES} slides with an image: give the big idea an image-hero and "
+        "each custom solution's concept slide a picture. Never write an image URL.",
     ]
     return "\n".join(lines)

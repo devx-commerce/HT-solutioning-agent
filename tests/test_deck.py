@@ -38,6 +38,9 @@ DECK = {
         {"layout": "quote", "quote": "One idea"},
         {"layout": "feature-grid", "columns": 2,
          "cards": [{"title": "A"}, {"title": "B"}]},
+        {"layout": "image-hero", "heading": "Big idea", "image": "placeholder", "imageAlt": "A market"},
+        {"layout": "two-column", "heading": "Pillar 1", "body": "x", "image": "placeholder", "imageAlt": "A van"},
+        {"layout": "two-column", "heading": "Pillar 2", "body": "y", "image": "placeholder", "imageAlt": "A shop"},
         {"layout": "two-column", "heading": "Next steps", "body": "Costing to follow.",
          "aside": "Pricing team to follow up."},
         {"layout": "closing", "heading": "Thank you"},
@@ -242,9 +245,9 @@ def test_outline_reports_index_layout_and_heading():
     with patch.object(deck_tools, "_load_brief", return_value=STORED):
         outline = deck_tools.get_deck_outline("b1")
 
-    assert [s["slide_index"] for s in outline["slides"]] == list(range(7))
-    assert outline["slides"][6]["layout"] == "closing"
-    assert outline["slides"][6]["heading"] == "Thank you"
+    assert [s["slide_index"] for s in outline["slides"]] == list(range(len(DECK["slides"])))
+    assert outline["slides"][-1]["layout"] == "closing"
+    assert outline["slides"][-1]["heading"] == "Thank you"
     assert outline["slides"][0]["lead"] == "keep me"  # full content, not field names
 
 

@@ -411,6 +411,65 @@ def test_a_source_that_cannot_be_resolved_is_dropped_with_its_claim():
     assert log.call_args.kwargs["unresolved_sources"] == 1
 
 
+@pytest.mark.parametrize("url", [
+    "https://economictimes.indiatimes.com/news/x",
+    "https://brandequity.economictimes.indiatimes.com/news/marketing/y",
+    "https://m.economictimes.com/tech/z",
+    "https://timesofindia.indiatimes.com/blogs/a",
+    "https://www.jagran.com/b",
+    "https://TRIBUNEINDIA.COM/news/c",
+])
+def test_competitor_domains_and_their_subdomains_are_blocked(url):
+    assert research.source_policy.is_blocked(url)
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.hindustantimes.com/x",
+    "https://www.livemint.com/x",
+    "https://www.afaqs.com/news/x",
+    "https://notindiatimes.com/x",        # suffix match is on a dot boundary
+    "https://indiatimes.com.example.org/x",
+    "not a url",
+    "",
+])
+def test_ht_trade_press_and_lookalike_domains_are_not_blocked(url):
+    assert not research.source_policy.is_blocked(url)
+
+
+def test_a_claim_resting_only_on_a_competitor_is_dropped_and_counted():
+    resp = _grounded_response(
+        [_chunk("https://economictimes.indiatimes.com/a", "ET"),
+         _chunk("https://www.afaqs.com/b", "afaqs")],
+        [_support("Only ET says this.", [0]),
+         _support("Both say this.", [0, 1])],
+    )
+    with patch.object(research, "_log_retrieval") as log, _genai_returning(resp):
+        findings = research.search_web("rapido", "b")["findings"]
+
+    assert findings == [
+        {"claim": "Both say this.", "sources": [{"url": "https://www.afaqs.com/b", "title": "afaqs"}]}
+    ]
+    assert log.call_args.kwargs["competitor_sources_dropped"] == 1
+    assert log.call_args.kwargs["source_urls"] == ["https://www.afaqs.com/b"]
+
+
+def test_a_redirect_to_a_competitor_is_blocked_after_resolution():
+    """The vertexaisearch link names no publisher; only its target does."""
+    resp = _grounded_response([_chunk(REDIRECT, "x")], [_support("Claim.", [0])])
+    with patch.object(research, "_log_retrieval"), \
+         patch.object(research, "_resolve_redirect",
+                      return_value="https://timesofindia.indiatimes.com/a"), \
+         _genai_returning(resp):
+        assert research.search_web("acme", "b")["findings"] == []
+
+
+def test_the_agent_is_told_which_outlets_not_to_cite():
+    from agents.solutioning_agent.agent import root_agent
+
+    for outlet in research.source_policy.OUTLETS:
+        assert outlet in root_agent.instruction
+
+
 def test_an_ungrounded_answer_is_retried_once():
     """The model sometimes answers from memory without searching."""
     ungrounded = _grounded_response([], [], searches=())
@@ -943,3 +1002,15 @@ def test_a_deck_with_no_uri_still_gets_an_openable_link():
     link = "https://drive.google.com/open?id=1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456"
     assert result["results"][0]["link"] == link
     assert log.call_args.kwargs["source_urls"] == [link]
+
+
+
+def test_the_agent_model_retries_quota_and_server_errors():
+    """One 429 mid-run must not fail a whole brief."""
+    from agents.solutioning_agent.agent import root_agent
+
+    retry = root_agent.model.retry_options
+    assert retry.attempts >= 3 and 429 in retry.http_status_codes
+    with patch("agents.solutioning_agent.agent.Client") as client:
+        type(root_agent.model).api_client.func(root_agent.model)
+    assert client.call_args.kwargs["http_options"].retry_options is retry
