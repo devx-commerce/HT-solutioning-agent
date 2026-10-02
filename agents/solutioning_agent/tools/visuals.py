@@ -387,15 +387,18 @@ def generate_image(description: str, ratio: str) -> str | None:
     return uri
 
 
-def _placeholder_slots(deck: dict) -> list[tuple[dict, str, str]]:
+def _placeholder_slots(deck: dict, only=None) -> list[tuple[dict, str, str]]:
     """(slide, ratio, description) for every slide image still a placeholder.
 
-    Why HT slides are skipped: their one image slot is HT's logo, which is
-    never generated.
+    `only` limits it to those slide objects. Why HT slides are skipped:
+    their one image slot is HT's logo, which is never generated.
     """
+    allowed = None if only is None else {id(s) for s in only}
     slots = []
     for slide in deck.get("slides") or []:
         if not isinstance(slide, dict) or str(slide.get("notes", "")).startswith("[why-ht:"):
+            continue
+        if allowed is not None and id(slide) not in allowed:
             continue
         image = slide.get("image")
         if isinstance(image, str) and image.startswith(master_deck.PLACEHOLDER_PREFIX):
@@ -407,14 +410,15 @@ def _placeholder_slots(deck: dict) -> list[tuple[dict, str, str]]:
     return slots
 
 
-def fill_images(deck: dict) -> dict:
+def fill_images(deck: dict, only=None) -> dict:
     """Replace placeholder slide images with generated ones, in place.
 
     Run after master_deck.enforce, which has already turned every image the
-    model wrote into a placeholder carrying its description. Returns how many
+    model wrote into a placeholder carrying its description. `only`, when
+    given, limits it to those slides (a revision's own). Returns how many
     were generated and how many remain placeholders.
     """
-    slots = _placeholder_slots(deck)
+    slots = _placeholder_slots(deck, only)
     if not slots:
         return {"generated": 0, "placeholders": 0}
     todo = slots[:_MAX_IMAGES_PER_DECK]
@@ -431,3 +435,73 @@ def fill_images(deck: dict) -> dict:
         budget -= len(uri)
         generated += 1
     return {"generated": generated, "placeholders": len(slots) - generated}
+
+
+# --- an image the person supplies -----------------------------------------------
+
+# What each image slot accepts from a person's upload. A photo is cropped to
+# fill its frame, so it must be close to the frame's shape or the crop cuts
+# away what they wanted shown; and it must have enough pixels not to print
+# soft at the frame's size.
+_SLOT_RULES = {
+    "two-column": {"ratio": 12 / 13, "label": "12:13 (nearly square)",
+                   "ideal": "1100×1200 px", "min_w": 550, "min_h": 600},
+    "image-hero": {"ratio": 16 / 9, "label": "16:9 (widescreen)",
+                   "ideal": "1920×1080 px", "min_w": 1280, "min_h": 720},
+}
+# The most of a picture a cover crop may cut away before it is refused.
+_MAX_CROP = 0.20
+_MAX_UPLOAD_BYTES = 4_000_000
+
+
+def _ratio_label(w: int, h: int) -> str:
+    for name, r in (("16:9", 16 / 9), ("4:3", 4 / 3), ("3:2", 3 / 2), ("1:1", 1.0),
+                    ("3:4", 3 / 4), ("2:3", 2 / 3), ("9:16", 9 / 16)):
+        if abs(w / h - r) / r < 0.03:
+            return name
+    return f"{w / h:.2f}:1"
+
+
+def check_upload(data: bytes, mime_hint: str, target: str) -> tuple[str | None, str]:
+    """(data URI, "") when an uploaded image can go in `target`, else (None, why).
+
+    `target` is a slide layout with an image slot ("two-column",
+    "image-hero") or "logo". The reason is written to be passed straight to
+    the person: what's wrong and what would work instead.
+    """
+    kind = _image_type_and_size(data)
+    if kind is None:
+        what = mime_hint or "this file"
+        return None, (f"{what} isn't a format the deck can use. Send it as a PNG or "
+                      "JPEG (SVG, WebP and HEIC can't be placed reliably in Google Slides).")
+    mime, w, h = kind
+    if len(data) > _MAX_UPLOAD_BYTES:
+        return None, (f"The image is {len(data) / 1_000_000:.1f} MB; images up to "
+                      f"{_MAX_UPLOAD_BYTES // 1_000_000} MB can be placed. Send a smaller "
+                      "export of it.")
+    uri = f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    if target == "logo":
+        if max(w, h) < _MIN_LOGO_LONG_SIDE or min(w, h) < _MIN_LOGO_SHORT_SIDE:
+            return None, (f"The logo is only {w}×{h} px, so it would print blurred on "
+                          f"the cover. Send one at least {_MIN_LOGO_LONG_SIDE} px on its "
+                          "longer side, ideally a PNG with a transparent background.")
+        return uri, ""
+    rule = _SLOT_RULES.get(target)
+    if rule is None:
+        return None, ("That slide's layout has no picture slot. Pictures go on a "
+                      "two-column slide (right half) or an image-hero slide (full slide).")
+    # Every problem at once, so a second upload isn't refused for the other.
+    problems = []
+    if w < rule["min_w"] or h < rule["min_h"]:
+        problems.append(f"it is {w}×{h} px, too small for this slot, so it would look "
+                        f"soft on screen (it needs at least {rule['min_w']}×{rule['min_h']} px)")
+    crop = 1 - min(w / h, rule["ratio"]) / max(w / h, rule["ratio"])
+    if crop > _MAX_CROP:
+        problems.append(f"it is {_ratio_label(w, h)} ({w}×{h} px) but this slot is "
+                        f"{rule['label']}, so filling it would crop away about "
+                        f"{round(crop * 100)}% of the picture")
+    if problems:
+        return None, ("The image can't be used here: " + "; and ".join(problems) +
+                      f". Send a {rule['label']} image, ideally {rule['ideal']}, or place "
+                      "it on a slide whose frame matches its shape.")
+    return uri, ""

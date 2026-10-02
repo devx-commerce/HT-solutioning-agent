@@ -17,11 +17,15 @@ bundles only this directory — see oauth_creds.py for the same constraint.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 import requests
@@ -29,6 +33,8 @@ import requests
 from google.cloud import bigquery
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
 from . import master_deck, visuals, why_ht
@@ -199,17 +205,23 @@ def _upload_pptx(pptx: bytes, *, name: str, file_id: str) -> dict:
 
 
 def _lock_to_readers(drive, file_id: str) -> None:
-    """Read-only for everyone but the agent. Never fatal — a deck still beats no deck."""
-    if not DECK_READER_DOMAIN:
-        return
-    try:
-        drive.permissions().create(
-            fileId=file_id,
-            body={"type": "domain", "role": "reader", "domain": DECK_READER_DOMAIN},
-            fields="id",
-        ).execute()
-    except Exception:  # noqa: BLE001 - surfaced by the deck simply not being shared
-        pass
+    """Read-only for everyone but the agent, in each reader domain.
+
+    DECK_READER_DOMAIN is comma-separated: HT's people are on both
+    hindustantimes.com and htdigital.in. One domain failing never stops the
+    others, and never the deck: a deck still beats no deck.
+    """
+    for domain in (d.strip() for d in DECK_READER_DOMAIN.split(",")):
+        if not domain:
+            continue
+        try:
+            drive.permissions().create(
+                fileId=file_id,
+                body={"type": "domain", "role": "reader", "domain": domain},
+                fields="id",
+            ).execute()
+        except Exception:  # noqa: BLE001 - surfaced by the deck simply not being shared
+            pass
 
 
 def _save_brief(brief_id: str, **fields) -> None:
@@ -316,25 +328,38 @@ def build_solution_deck(
 
 
 def update_deck(brief_id: str, edits_json: str) -> dict:
-    """Change specific fields on specific slides of a deck already built.
+    """Revise a deck already built: change fields, and add, delete or move slides.
 
     Everything not named in the edits is left exactly as it was; this
-    patches the stored deck rather than regenerating it.
+    patches the stored deck rather than regenerating it. All edits in one
+    call are applied together and published once, or not at all.
 
     Args:
         brief_id: which brief's deck to change, from build_solution_deck or
             lookup_deck. Never invented.
-        edits_json: a JSON array of edits, each
-            {"slide_index": 0-based int, "field": name, "value": new value}.
-            A text field takes a string. A list field (rows, cards, steps,
-            stats) takes the whole new list: copy it from get_deck_outline
-            and change only what was asked. For example:
-            [{"slide_index": 2, "field": "heading", "value": "Festive reach"}].
+        edits_json: a JSON array of edits, applied in order. Each slide
+            index refers to the deck as it stands after the edits before it.
+            - Change a field: {"slide_index": 3, "field": "heading", "value": "..."}.
+              A text field takes a string. A list field (rows, cards, steps,
+              stats) takes the whole new list: copy it from get_deck_outline
+              and change only what was asked.
+            - Add a slide: {"op": "insert", "position": 5, "slide": {...}}.
+              The new slide gets index 5 and later slides move down one.
+            - Delete a slide: {"op": "delete", "slide_index": 7}.
+            - Move a slide: {"op": "move", "slide_index": 7, "position": 4}.
+              Afterwards it is at index 4.
+            Pictures: to give a slide a new picture, set its "image" to
+            "placeholder" and its "imageAlt" to a description of the new
+            picture, in the same call; it is generated when the edit is
+            published. An image shown in the outline as "(embedded image
+            <id>)" can be kept or reused on another slide by writing that
+            exact text as the value.
             Every call publishes to the real deck; never send a trial edit.
 
     Returns:
-        The deck's link and which edits were applied, or an error naming
-        what could not be found.
+        The deck's link, which edits were applied and how many pictures were
+        generated, or an error naming what could not be done (in which case
+        nothing changed).
     """
     stored = _load_brief(brief_id)
     if not stored or not stored.get("deck_json"):
@@ -345,25 +370,251 @@ def update_deck(brief_id: str, edits_json: str) -> dict:
     except json.JSONDecodeError as exc:
         return {"error": f"Could not read the edits or the stored deck: {exc}"}
     if not isinstance(edits, list):
-        return {"error": 'edits_json must be a JSON array of {"slide_index", "field", "value"}.'}
+        return {"error": 'edits_json must be a JSON array of edits, e.g. '
+                '[{"slide_index": 2, "field": "heading", "value": "..."}].'}
 
+    images = _embedded_images(deck)
     slides = deck.get("slides") or []
-    applied = []
+    deck["slides"] = slides
+    applied, touched = [], []
     for edit in edits:
         if not isinstance(edit, dict):
-            return {"error": f'Each edit must be an object, got: {edit!r}'}
-        index, field = edit.get("slide_index"), edit.get("field")
-        if not isinstance(index, int) or not 0 <= index < len(slides):
-            return {"error": f"slide_index {index} is outside this deck's {len(slides)} slides."}
-        if not field:
-            return {"error": "Every edit needs a field name."}
+            return {"error": f"Each edit must be an object, got: {edit!r}. Nothing was changed."}
+        outcome = _apply_edit(slides, edit, touched)
+        if outcome.startswith("error: "):
+            return {"error": outcome[len("error: "):] + " Nothing was changed."}
+        applied.append(outcome)
+
+    unknown = _restore_images(deck, images)
+    if unknown:
+        return {"error": f"These image references aren't in this deck: {', '.join(sorted(unknown))}. "
+                "Copy them exactly from get_deck_outline. Nothing was changed."}
+
+    result = _republish(brief_id, stored, deck, new_pictures_on=touched)
+    if "error" in result:
+        return result
+    return {**result, "edits_applied": applied}
+
+
+def _index_ok(value, upper: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value < upper
+
+
+def _apply_edit(slides: list, edit: dict, touched: list) -> str:
+    """Apply one edit in place; a description of it, or "error: ..."."""
+    op = edit.get("op", "set")
+    index = edit.get("slide_index")
+    if op == "set":
+        field = edit.get("field")
+        if not _index_ok(index, len(slides)):
+            return f"error: slide_index {index} is outside this deck's {len(slides)} slides."
+        if not field or not isinstance(field, str):
+            return "error: Every field edit needs a field name."
         slides[index][field] = edit.get("value")
-        applied.append(f"slide {index}: {field}")
+        touched.append(slides[index])
+        return f"slide {index}: {field}"
+    if op == "insert":
+        position, slide = edit.get("position"), edit.get("slide")
+        if not _index_ok(position, len(slides) + 1):
+            return f"error: insert position {position} must be 0 to {len(slides)}."
+        if not isinstance(slide, dict) or not slide.get("layout"):
+            return "error: An insert needs a \"slide\" object with a \"layout\"."
+        slides.insert(position, slide)
+        touched.append(slide)
+        return f"inserted slide {position} ({slide.get('layout')})"
+    if op == "delete":
+        if not _index_ok(index, len(slides)):
+            return f"error: slide_index {index} is outside this deck's {len(slides)} slides."
+        removed = slides.pop(index)
+        return f"deleted slide {index} ({removed.get('layout') if isinstance(removed, dict) else '?'})"
+    if op == "move":
+        position = edit.get("position")
+        if not _index_ok(index, len(slides)):
+            return f"error: slide_index {index} is outside this deck's {len(slides)} slides."
+        if not _index_ok(position, len(slides)):
+            return f"error: move position {position} must be 0 to {len(slides) - 1}."
+        slides.insert(position, slides.pop(index))
+        return f"moved slide {index} to {position}"
+    return f'error: Unknown op {op!r}; use "insert", "delete", "move", or leave op out to change a field.'
+
+
+# Embedded images are elided from the outline (one is hundreds of KB), as a
+# reference the agent can hand back. Without it, an edit copying a list that
+# held an image back from the outline overwrote the real image with the
+# outline's placeholder text.
+_IMAGE_REF = re.compile(r"^\(embedded image ([0-9a-f]{10})\)$")
+
+
+def _image_ref(uri: str) -> str:
+    return f"(embedded image {hashlib.sha256(uri.encode('utf-8')).hexdigest()[:10]})"
+
+
+def _embedded_images(value, found: dict | None = None) -> dict[str, str]:
+    """Every embedded image in a deck, by the reference the outline shows."""
+    found = {} if found is None else found
+    if isinstance(value, dict):
+        for v in value.values():
+            _embedded_images(v, found)
+    elif isinstance(value, list):
+        for v in value:
+            _embedded_images(v, found)
+    elif isinstance(value, str) and value.startswith("data:image/"):
+        found[_image_ref(value)] = value
+    return found
+
+
+def _restore_images(value, images: dict[str, str]) -> set[str]:
+    """Swap outline image references back for the images, in place.
+
+    Returns any reference that isn't in the deck, including the bare
+    "(embedded image)" older outlines showed, which names no image at all.
+    """
+    unknown: set[str] = set()
+
+    def fix(v):
+        if isinstance(v, str) and v.startswith("(embedded image"):
+            if _IMAGE_REF.match(v) and v in images:
+                return images[v]
+            unknown.add(v)
+            return v
+        if isinstance(v, dict):
+            for k in v:
+                v[k] = fix(v[k])
+        elif isinstance(v, list):
+            for i in range(len(v)):
+                v[i] = fix(v[i])
+        return v
+
+    fix(value)
+    return unknown
+
+
+async def place_image_from_chat(
+    brief_id: str, slide_index: int, target: str, tool_context: ToolContext
+) -> dict:
+    """Put an image the person attached in this chat into their deck.
+
+    The image is checked first: format, size, resolution, and (for a slide
+    picture) whether its shape fits the slot without cropping much of it
+    away. If it doesn't fit, nothing changes and `rejected` says why in words
+    to pass on to the person, including what would work instead.
+
+    Args:
+        brief_id: which brief's deck, from build_solution_deck or lookup_deck.
+        slide_index: the slide to put it on, from get_deck_outline: a
+            two-column slide (right half) or an image-hero slide. Pass 0
+            with target "client_logo".
+        target: "slide_image" to use it as that slide's picture, or
+            "client_logo" to use it as the client's logo on the cover.
+
+    Returns:
+        The deck's link and what was placed; or `rejected` with the reason;
+        or an error when no image was attached or the slide can't take one.
+    """
+    found = await _latest_uploaded_image(tool_context)
+    if found is None:
+        return {"error": "No image is attached in this conversation. Ask the person "
+                "to attach it (PNG or JPEG) in the chat, then try again."}
+    data, mime = found
+    return await asyncio.to_thread(_place_image, brief_id, slide_index, target, data, mime)
+
+
+def _place_image(brief_id: str, slide_index: int, target: str, data: bytes, mime: str) -> dict:
+    if target not in ("slide_image", "client_logo"):
+        return {"error": 'target must be "slide_image" or "client_logo".'}
+    stored = _load_brief(brief_id)
+    if not stored or not stored.get("deck_json"):
+        return {"error": f"No stored deck found for brief_id {brief_id}."}
+    try:
+        deck = json.loads(stored["deck_json"])
+    except json.JSONDecodeError as exc:
+        return {"error": f"The stored deck could not be read: {exc}"}
+    slides = deck.get("slides") or []
+
+    if target == "client_logo":
+        if not slides or slides[0].get("layout") != "title":
+            return {"error": "This deck has no cover slide to put a logo on."}
+        uri, why = visuals.check_upload(data, mime, "logo")
+        if not uri:
+            return {"rejected": why, "deck_unchanged": True}
+        logos = slides[0].get("logos") if isinstance(slides[0].get("logos"), list) else []
+        ht = logos[0] if logos else {"image": visuals.ht_logo() or "placeholder", "alt": "HT Media logo"}
+        slides[0]["logos"] = [ht, {"image": uri, "alt": f"{stored.get('client_name') or 'Client'} logo"}]
+        placed = "client logo on the cover"
+    else:
+        if not _index_ok(slide_index, len(slides)):
+            return {"error": f"slide_index {slide_index} is outside this deck's {len(slides)} slides."}
+        slide = slides[slide_index]
+        uri, why = visuals.check_upload(data, mime, slide.get("layout", ""))
+        if not uri:
+            return {"rejected": why, "deck_unchanged": True}
+        slide["image"] = uri
+        slide["imageFit"] = "cover"
+        slide["imageAlt"] = slide.get("imageAlt") or "Image supplied by the HT team"
+        placed = f"picture on slide {slide_index}"
 
     result = _republish(brief_id, stored, deck)
     if "error" in result:
         return result
-    return {**result, "edits_applied": applied}
+    return {**result, "placed": placed}
+
+
+async def _latest_uploaded_image(tool_context) -> tuple[bytes, str] | None:
+    """The newest image the person attached: this message, earlier ones, artifacts.
+
+    How Gemini Enterprise hands an uploaded file to an Agent Engine agent is
+    unconfirmed (docs/open-items.md), so every shape ADK can deliver one in
+    is tried: inline bytes on a message part, a file reference on one, or a
+    saved artifact.
+    """
+    contents = [tool_context.user_content]
+    session = getattr(tool_context, "session", None)
+    for event in reversed(getattr(session, "events", None) or []):
+        if getattr(event, "author", "") == "user":
+            contents.append(getattr(event, "content", None))
+    for content in contents:
+        for part in reversed(getattr(content, "parts", None) or []):
+            found = _image_from_part(part)
+            if found:
+                return found
+    try:
+        names = await tool_context.list_artifacts()
+    except Exception:  # noqa: BLE001 - no artifact service configured
+        names = []
+    for name in reversed(names or []):
+        try:
+            part = await tool_context.load_artifact(name)
+        except Exception:  # noqa: BLE001
+            continue
+        found = _image_from_part(part) if part else None
+        if found:
+            return found
+    return None
+
+
+def _image_from_part(part) -> tuple[bytes, str] | None:
+    inline = getattr(part, "inline_data", None)
+    if inline is not None and getattr(inline, "data", None):
+        mime = getattr(inline, "mime_type", "") or ""
+        if mime.startswith("image/") or visuals._image_type_and_size(inline.data):
+            return inline.data, mime
+    file_data = getattr(part, "file_data", None)
+    uri = getattr(file_data, "file_uri", "") if file_data is not None else ""
+    mime = getattr(file_data, "mime_type", "") if file_data is not None else ""
+    if uri and (mime or "").startswith("image/"):
+        try:
+            if uri.startswith("gs://"):
+                from google.cloud import storage
+
+                bucket, _, name = uri[len("gs://"):].partition("/")
+                data = storage.Client(project=PROJECT).bucket(bucket).blob(name).download_as_bytes()
+            else:
+                with urllib.request.urlopen(uri, timeout=20) as resp:
+                    data = resp.read(visuals._MAX_UPLOAD_BYTES + 1)
+            return data, mime
+        except Exception:  # noqa: BLE001 - an unreadable reference is no image
+            return None
+    return None
 
 
 def add_why_ht_slides(brief_id: str, variants: str) -> dict:
@@ -404,8 +655,17 @@ def add_why_ht_slides(brief_id: str, variants: str) -> dict:
     return {**result, "why_ht_slides": inserted}
 
 
-def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
-    """Check, re-render and replace a revised deck in place, keeping its file id."""
+# Past this the stored deck risks BigQuery's 10 MB request limit on save.
+_MAX_STORED_DECK_CHARS = 8_000_000
+
+
+def _republish(brief_id: str, stored: dict, deck: dict, new_pictures_on=()) -> dict:
+    """Check, re-render and replace a revised deck in place, keeping its file id.
+
+    Pictures are generated only for placeholder slots on `new_pictures_on`,
+    the slides the revision itself added or changed: a revision changes what
+    it names and nothing else, so untouched placeholders stay as they are.
+    """
     problems = master_deck.enforce(deck)
     if problems:
         return {
@@ -413,10 +673,16 @@ def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
             "is unchanged.",
             "problems": problems,
         }
-    # No logo lookup or image generation here: a revision changes exactly
-    # the fields it names, and the pictures from the build are already in
-    # the stored deck.
+    pictures = {}
+    if new_pictures_on:
+        try:
+            pictures = {"images": visuals.fill_images(deck, only=new_pictures_on)}
+        except Exception:  # noqa: BLE001 - never a reason not to publish
+            visuals.log.exception("visuals.failed")
     updated_json = json.dumps(deck)
+    if len(updated_json) > _MAX_STORED_DECK_CHARS:
+        return {"error": "The deck would be too large to store with this many "
+                "images; the deck is unchanged. Remove or replace an image first."}
     try:
         pptx = _render_pptx(updated_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
@@ -426,7 +692,7 @@ def _republish(brief_id: str, stored: dict, deck: dict) -> dict:
 
     _upload_pptx(pptx, name="", file_id=stored["deck_file_id"])
     _save_brief(brief_id, deck_json=updated_json, status="drafted")
-    return {"brief_id": brief_id, "link": stored["deck_link"]}
+    return {"brief_id": brief_id, "link": stored["deck_link"], **pictures}
 
 
 def _load_brief(brief_id: str) -> dict | None:
@@ -455,7 +721,7 @@ def _readable(value):
     if isinstance(value, list):
         return [_readable(v) for v in value]
     if isinstance(value, str) and value.startswith("data:image/"):
-        return "(embedded image)"
+        return _image_ref(value)
     return value
 
 
@@ -496,42 +762,57 @@ def get_deck_outline(brief_id: str) -> dict:
 
 
 def lookup_deck(client_name: str) -> dict:
-    """Find the most recent deck built for a client, so it can be edited.
+    """Find the decks already built for a client, so one can be edited.
 
     A conversation doesn't remember decks built in an earlier session, and
     the email flow builds decks outside any conversation at all. This is
     how an existing deck gets found again instead of duplicated.
 
     Args:
-        client_name: the client name to search for. It matches the value
-            passed to build_solution_deck, not a free-text query.
+        client_name: the client's name. Matches any deck whose client name
+            contains it, ignoring case, so "Tata" also finds "Tata Sampann".
 
     Returns:
-        The most recent matching deck's brief_id, file id and link, or a
-        not-found status the agent should report rather than guess past.
+        found, and the matching decks newest first (up to five), each with
+        its brief_id, title, client, link and when it was last changed. When
+        exactly one matches, its brief_id and link are also given at the top
+        level. When several match, list them for the person and ask which
+        one they mean; never pick one yourself.
     """
     rows = list(
         bigquery.Client(project=PROJECT).query(
             f"""
-            SELECT brief_id, deck_file_id, deck_link, deck_json IS NOT NULL AS has_deck_json
+            SELECT brief_id, client_name, deck_file_id, deck_link, updated_at,
+                   JSON_VALUE(deck_json, '$.slides[0].heading') AS title,
+                   deck_json IS NOT NULL AS has_deck_json
             FROM `{PROJECT}.{DATASET}.briefs`
-            WHERE LOWER(client_name) = LOWER(@client_name) AND deck_file_id IS NOT NULL
-            ORDER BY updated_at DESC LIMIT 1
+            WHERE LOWER(client_name) LIKE CONCAT('%', LOWER(@client_name), '%')
+              AND deck_file_id IS NOT NULL
+            QUALIFY ROW_NUMBER() OVER (PARTITION BY brief_id ORDER BY updated_at DESC) = 1
+            ORDER BY updated_at DESC LIMIT 5
             """,
             job_config=bigquery.QueryJobConfig(
                 query_parameters=[
-                    bigquery.ScalarQueryParameter("client_name", "STRING", client_name)
+                    bigquery.ScalarQueryParameter("client_name", "STRING", client_name.strip())
                 ]
             ),
         ).result()
     )
     if not rows:
         return {"found": False}
-    row = rows[0]
-    return {
-        "found": True,
-        "brief_id": row["brief_id"],
-        "deck_id": row["deck_file_id"],
-        "link": row["deck_link"],
-        "editable": bool(row["has_deck_json"]),
-    }
+    decks = [
+        {
+            "brief_id": r["brief_id"],
+            "title": r["title"] or "",
+            "client_name": r["client_name"],
+            "link": r["deck_link"],
+            "last_changed": r["updated_at"].strftime("%d %b %Y, %H:%M UTC") if r["updated_at"] else "",
+            "editable": bool(r["has_deck_json"]),
+        }
+        for r in rows
+    ]
+    result = {"found": True, "decks": decks}
+    if len(decks) == 1:
+        result.update(brief_id=decks[0]["brief_id"], link=decks[0]["link"],
+                      editable=decks[0]["editable"])
+    return result

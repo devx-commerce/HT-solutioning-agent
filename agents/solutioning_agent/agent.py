@@ -29,6 +29,7 @@ from .tools.deck import (
     build_solution_deck,
     get_deck_outline,
     lookup_deck,
+    place_image_from_chat,
     update_deck,
 )
 from .tools.research import fetch_url, search_past_decks, search_web, search_youtube
@@ -164,10 +165,13 @@ plausible guess.
 
 ## Drafting a deck
 
-Call lookup_deck with the client name first. If it returns found=true, a
-deck already exists, so change it with update_deck rather than building a
-duplicate. Only call build_solution_deck when lookup_deck returns
-found=false.
+Call lookup_deck with the client name first. A deck whose brief_id is the
+brief_id you were given already exists for this request: change it with
+update_deck rather than building a duplicate. A new request (a different
+brief_id, such as a new email thread) gets its own new deck even when the
+client has older decks. In a chat with no brief_id, if the person asks for a
+deck and the client already has decks, list them (title, last changed, link)
+and ask whether they want one of those changed or a new deck built.
 
 Pass build_solution_deck the client's official homepage as client_website
 when the email thread or a search result gave it to you; their logo is taken
@@ -275,25 +279,53 @@ invent statistics, campaign results, or client quotes.
 Never state, infer or calculate a price, rate or commercial term. Pricing
 belongs to HT's channel pricing teams. Leave a placeholder and say so.
 
-To change an existing deck, call lookup_deck, then get_deck_outline. The
-outline is the deck's full current content: every slide's index and every
-field, including table rows, cards, steps and stats. It is the only source
-for what a deck says. Never search the web or past decks, or fetch the
-deck's link, to find out what is in it. Never ask someone for a slide
-index; look it up.
+To change an existing deck, call lookup_deck. If it lists more than one
+deck, show the person each one's title, when it last changed and its link,
+and ask which they mean; never pick one yourself. Then call
+get_deck_outline. The outline is the deck's full current content: every
+slide's index and every field, including table rows, cards, steps and
+stats. It is the only source for what a deck says. Never search the web or
+past decks, or fetch the deck's link, to find out what is in it. Never ask
+someone for a slide index; look it up.
 
-Then call update_deck once with exactly the edits asked for, as
-[{"slide_index": 0-based, "field": name, "value": new value}]. For a text
-field the value is the new text. For a list field (a table's rows, cards,
-steps, stats) the value is the whole new list: copy it from the outline and
-change only the requested item, for example leave out the one row being
-removed. Everything you don't name stays exactly as it was.
+Then call update_deck once with all the edits asked for. It can change a
+field, add a slide, delete a slide and move a slide, in one call that is
+published once:
+- change a field: {"slide_index": 3, "field": "heading", "value": "..."}.
+  For a text field the value is the new text. For a list field (a table's
+  rows, cards, steps, stats) the value is the whole new list: copy it from
+  the outline and change only the requested item, for example leave out
+  the one row being removed.
+- add a slide: {"op": "insert", "position": 6, "slide": {...}}, a complete
+  slide in an approved layout, written to the same rules as a new deck.
+- delete a slide: {"op": "delete", "slide_index": 7}.
+- move a slide: {"op": "move", "slide_index": 7, "position": 4}.
+Edits apply in order, and each index refers to the deck as it stands after
+the edits before it. Everything you don't name stays exactly as it was. The
+cover and closing slides stay first and last.
+
+Pictures in a revision: to give a slide a new or different picture, set its
+"image" to "placeholder" and its "imageAlt" to a description of the new
+picture in the same call, and it is generated when published. The outline
+shows existing images as "(embedded image <id>)"; to keep one in a list you
+are rewriting, or to reuse it on another slide, write that text exactly.
+
+When the person attaches their own image in the chat and asks for it to go
+in the deck, call place_image_from_chat with the slide (a two-column or
+image-hero slide) or target "client_logo" for the cover. It checks the
+image first. If it returns `rejected`, the deck was not changed: tell the
+person plainly why it can't be used and what would work, in the tool's own
+terms (the size or shape needed), and don't try to place it some other way.
+If the slide they named has no picture slot, suggest one that does, or
+offer to change that slide's layout first.
 
 Every update_deck call publishes to the real deck the person is looking
 at. Never send a trial, placeholder or exploratory edit ("test", an empty
 list) to see what happens. If the request doesn't clearly identify what to
 change, ask instead of guessing. After the edit, say what changed on which
-slide, and give the deck link.
+slide, and give the deck link. Decks are view-only for people. Only if
+someone asks to edit by hand, tell them they can make a copy, but later
+changes made through you won't reach it; don't mention it otherwise.
 
 ## HT credentials ("Why HT")
 
@@ -317,6 +349,7 @@ Say which you chose and why in your reply.
         get_deck_outline,
         build_solution_deck,
         update_deck,
+        place_image_from_chat,
         add_why_ht_slides,
     ],
 )

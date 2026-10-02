@@ -16,15 +16,16 @@ being acted on right now.
   2026-10-01 in `tools/visuals.py` (HT confirmed generated images are fine
   for generic deck use). See "Unverified until credentials are restored"
   below.
-- **User-uploaded image → attach to a specific slide** (someone hands the
-  agent an icon/logo mid-chat and asks it to place it). Fits the existing
-  patch-and-reupload revision pipeline conceptually, but depends on an
-  unconfirmed platform capability — see the open question below.
+- ~~User-uploaded image → attach to a specific slide~~: built 2026-10-01 as
+  `place_image_from_chat` (checks format, size, resolution and shape against
+  the slot, and refuses with a reason the agent passes on). Works when the
+  image reaches the agent; whether Gemini Enterprise delivers it is still
+  the open question below.
 
 ## Needs HT to confirm
 
 - **Competitor publications excluded from research** (`tools/source_policy.py`,
-  assumed 2026-10-01, not confirmed by HT). Web findings whose only sources
+  confirmed fine by the project lead 2026-10-01). Web findings whose only sources
   are on these domains are dropped, and the agent is told not to name them:
   - Times Group: indiatimes.com (TOI, ET, ET BrandEquity, Navbharat Times),
     timesofindia.com, economictimes.com, maharashtratimes.com
@@ -156,10 +157,16 @@ credentials had expired, so these have not run against the live project:
 
 - **Does Gemini Enterprise's chat surface forward an uploaded file's bytes
   (or a storage reference) to the agent in a form a tool function can
-  access?** Not confirmed by anything in this repo or the SOW — no
-  file-upload handling exists in the code. Test directly in the GE chat
-  (attach an image, ask the agent to describe what was sent) before building
-  the attach-to-slide tool around an assumption.
+  access?** Still unconfirmed. `place_image_from_chat` now accepts every
+  shape ADK can deliver one in (inline bytes on the message, a gs:// or
+  https file reference, or a saved artifact, in this message or an earlier
+  one) and is verified locally with inline bytes. If GE forwards none of
+  these, the tool replies "No image is attached". Test after the next
+  deploy: attach a 1920×1080 JPEG in a GE chat and ask for it on a deck's
+  big idea slide.
+- ~~Who can open the decks?~~ Both `hindustantimes.com` and `htdigital.in`
+  are HT's own; `DECK_READER_DOMAIN` is now comma-separated and set to both
+  (2026-10-01). The deployed config must be updated to match.
 - **How does the vendor/tool for the Competitor Analysis Tool integration
   expose its data** — API, scheduled export, or UI-only? SOW (§10.3.viii)
   says this needs confirming with the client; not yet done. Blocks that
@@ -278,4 +285,6 @@ disabling it. Supersede it with a new version instead.
 - 2026-09-25: file created, seeded from items deprioritized during the
   research/rendering planning conversation.
 - 2026-10-01: competitor source list, unverified-live items; image
-  generation, logos and the sender exclusion list moved to built.
+  generation, logos and the sender exclusion list moved to built. Decks now
+  go to the "Agent Generated Decks" folder (`DECK_FOLDER_ID`
+  1ethtG7qzfsL1QOsutGRqr9MaeN9vpzIF, owned by sales.agent@).

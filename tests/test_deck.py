@@ -19,6 +19,7 @@ tool documents.
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -269,6 +270,20 @@ def test_outline_carries_every_field_so_a_table_row_can_be_found():
         outline = deck_tools.get_deck_outline("b1")
     slide = outline["slides"][4]
     assert slide["cards"][0]["body"] == "Live Hindustan native content"
-    assert outline["slides"][1]["image"] == "(embedded image)"   # no 5 KB blob
+    # No 5 KB blob, but a reference an edit can hand back.
+    assert re.fullmatch(r"\(embedded image [0-9a-f]{10}\)", outline["slides"][1]["image"])
     assert "notes" not in outline["slides"][1]
     assert outline["slides"][0]["heading"] == "First"
+
+
+def test_decks_are_shared_read_only_with_every_reader_domain(monkeypatch):
+    monkeypatch.setattr(deck_tools, "DECK_READER_DOMAIN", "hindustantimes.com, htdigital.in")
+    drive = MagicMock()
+    drive.permissions().create().execute.side_effect = [OSError("first fails"), {"id": "p2"}]
+    drive.permissions().create.reset_mock()
+    deck_tools._lock_to_readers(drive, "f1")
+    bodies = [c.kwargs["body"] for c in drive.permissions().create.call_args_list]
+    assert bodies == [
+        {"type": "domain", "role": "reader", "domain": "hindustantimes.com"},
+        {"type": "domain", "role": "reader", "domain": "htdigital.in"},
+    ]
