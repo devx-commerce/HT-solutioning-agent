@@ -265,7 +265,7 @@ disabling it. Supersede it with a new version instead.
 ## Ideas not yet designed
 
 - ~~Sender blacklist for ingestion~~: built 2026-10-01 as
-  `ingestion.EXCLUDED_SENDERS` (HR, IT help desk, Darwinbox), excluded in
+  `ingestion.EXCLUDED_SENDERS` (HR, payroll, IT help desk and IT communications, the "Happening Now" newsletter, Darwinbox), excluded in
   the Branch A Gmail query; Branch B (manual label) is never filtered. Notes
   from before it was built:
   **Sender blacklist for ingestion.** Certain senders (HR, IT service desk,

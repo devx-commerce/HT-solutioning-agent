@@ -207,6 +207,9 @@ def test_branch_a_query_excludes_every_listed_internal_sender():
         "ithelpdesk@hindustantimes.com",
         "noreply@darwinbox.in",
         "digests@darwinbox.in",
+        "payroll@hindustantimes.com",
+        "trending@hindustantimes.com",
+        "itcommunication@hindustantimes.com",
     ):
         assert f"-from:{addr}" in query.split()
     # The watermark bound is still there after the added terms.
