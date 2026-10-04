@@ -1,5 +1,8 @@
 # Weekly report
 
+The weekly eval email (sent to `settings.eval_summary_email`) includes this
+report as tables, so nobody needs to run it by hand each week.
+
 [`bigquery/weekly_report.sql`](../../bigquery/weekly_report.sql) reports
 what the agent did over a period, from data it already logs. Open the
 BigQuery console in project `academic-diode-477405-m3`, paste the file, and
@@ -8,7 +11,7 @@ run it. Each query shows as its own result. It covers the last 7 days; change
 
 | Query | Shows |
 |---|---|
-| 1. Emails | Every email the inbox check looked at, by decision: a brief, not a brief, already being handled, or labelled by hand |
+| 1. Emails checked | Every email the inbox check looked at, by decision: a brief, not a brief, already handled, or labelled by hand |
 | 2. Briefs | Briefs from email by outcome (built or failed) and by how they were picked up (automatically, or by the `generate-deck` label). Each built brief sent one "deck drafted" email. |
 | 3. Time to first draft | Median and 70th-percentile hours from an email arriving to its deck being built, and the share within 4 hours |
 | 4. Decks | Decks built, and decks revised afterwards |
