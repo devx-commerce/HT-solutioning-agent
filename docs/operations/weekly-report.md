@@ -1,7 +1,7 @@
 # Weekly report
 
 The weekly eval email (sent to `settings.eval_summary_email`) includes this
-report as tables, so nobody needs to run it by hand each week.
+report as one table of key figures, so nobody needs to run it by hand each week.
 
 [`bigquery/weekly_report.sql`](../../bigquery/weekly_report.sql) reports
 what the agent did over a period, from data it already logs. Open the

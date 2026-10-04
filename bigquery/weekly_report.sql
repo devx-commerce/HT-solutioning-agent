@@ -1,7 +1,8 @@
 -- Weekly report: what the Solutioning Agent did over a period, from the data
 -- it already logs. Paste into the BigQuery console (project
 -- academic-diode-477405-m3) and run; each query below shows as its own result.
--- Change the two dates to report on another period.
+-- Change the two dates to report on another period. The weekly email
+-- (evals/report.py) reads these queries in this order.
 
 DECLARE period_start TIMESTAMP DEFAULT TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY);
 DECLARE period_end   TIMESTAMP DEFAULT CURRENT_TIMESTAMP();

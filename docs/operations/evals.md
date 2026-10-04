@@ -10,7 +10,7 @@ sound, and is it built properly?
 | Run | What | How long | Where the result goes |
 |---|---|---|---|
 | After every deploy | The smoke cases (`settings.evals.smoke_cases`), once | About 15 minutes | Emailed to `settings.eval_summary_email`; kept in the eval bucket |
-| Weekly | Every case three times, plus the revision chats | About 3 to 4 hours | Same, together with the week's usage report ([weekly-report.md](weekly-report.md)) as tables |
+| Weekly | Every case three times, plus the revision chats | About 3 to 4 hours | Same, together with the week's usage report ([weekly-report.md](weekly-report.md)) |
 | By hand | Any cases you choose | About 5 minutes a case | Printed, and kept locally |
 
 A failing eval never blocks a deploy. Read the summary, and treat a drop in
