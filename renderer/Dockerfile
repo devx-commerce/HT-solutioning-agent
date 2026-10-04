@@ -1,5 +1,5 @@
-# Slim HT deck renderer. Build dist/ first with renderer/build.sh; this image
-# contains only that bundle and the ht-media theme chain.
+# Slim HT deck renderer: the committed bundle in dist/ (see dist/BUILD_INFO)
+# and the ht-media theme chain, nothing else.
 FROM node:20-slim
 WORKDIR /app
 COPY dist/ ./

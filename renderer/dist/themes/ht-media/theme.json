@@ -1,0 +1,29 @@
+{
+  "name": "ht-media",
+  "version": "0.1.0",
+  "extends": "blue-professional",
+  "description": "HT Media \u2014 white paper, HT cyan and HT Media blue, Georgia + Arial.",
+  "vibe": "HT Media sales decks: all-white slides with blue-professional's frame and accent stub, HT's logo cyan as the accent and HT Media blue for eyebrows. No header band: bg2 is white, so a heading of any length sits on one surface. System fonts only, so a deck looks the same in Google Slides and PowerPoint without embedding.",
+  "license": "MIT",
+  "author": "HT Media solutioning",
+  "roles": {
+    "bg": "#FFFFFF",
+    "bg2": "#FFFFFF",
+    "text": "#1A1A1A",
+    "muted": "#5F6368",
+    "accent": "#008BA5",
+    "accent2": "#005CA9",
+    "cardBg": "#F3F9FB",
+    "border": "#CFE7EC"
+  },
+  "typography": {
+    "headingFont": "Georgia, 'Times New Roman', serif",
+    "bodyFont": "Arial, Helvetica, sans-serif",
+    "headingWeight": 700,
+    "googleFonts": []
+  },
+  "geometry": {
+    "radius": "8px",
+    "slideWidth": "1280px"
+  }
+}

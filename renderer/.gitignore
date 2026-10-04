@@ -1,2 +1,3 @@
-# Built by build.sh from a presentation-md checkout; see BUILD_INFO inside.
-dist/
+# renderer/dist is committed on purpose: it is the deployed renderer, built
+# by build.sh from HT's presentation-md fork (commit in dist/BUILD_INFO).
+# Deploys use it as is; only rebuild it when the fork itself changes.

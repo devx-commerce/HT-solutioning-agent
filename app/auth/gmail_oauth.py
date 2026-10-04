@@ -12,7 +12,7 @@ refresh_token comes back even on a repeat consent; drop either one and a
 returning user silently gets no refresh_token at all.
 
 The `hd` (hosted domain) check on the verified id_token is the entire
-allowlist: only accounts on ALLOWED_ONBOARD_DOMAIN can onboard themselves.
+allowlist: only accounts on the ALLOWED_ONBOARD_DOMAIN domains can onboard themselves.
 That is deliberately coarser than the real project's eventual roster-Group
 model — good enough for proving the mechanism, not a substitute for it.
 """
@@ -51,7 +51,11 @@ GMAIL_SCOPES = [
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
-ALLOWED_DOMAIN = os.environ.get("ALLOWED_ONBOARD_DOMAIN", "")
+# Comma-separated: HT's people are on hindustantimes.com, htdigital.in and
+# livehindustan.com. Empty allows any verified Google account.
+ALLOWED_DOMAINS = {
+    d.strip().lower() for d in os.environ.get("ALLOWED_ONBOARD_DOMAIN", "").split(",") if d.strip()
+}
 STATE_SIGNING_KEY = os.environ.get("STATE_SIGNING_KEY", "")
 
 
@@ -133,8 +137,11 @@ def handle_callback(code: str, state: str) -> dict:
     if not claims.get("email_verified"):
         raise ValueError("Email not verified on this Google account.")
     email = claims["email"]
-    if ALLOWED_DOMAIN and claims.get("hd") != ALLOWED_DOMAIN:
-        raise ValueError(f"Only @{ALLOWED_DOMAIN} accounts can onboard here.")
+    if ALLOWED_DOMAINS and (claims.get("hd") or "").lower() not in ALLOWED_DOMAINS:
+        raise ValueError(
+            "Only " + ", ".join(f"@{d}" for d in sorted(ALLOWED_DOMAINS))
+            + " accounts can connect an inbox here."
+        )
 
     secret_id = "gmail-" + hashlib.sha256(email.encode()).hexdigest()[:16]
     _store_refresh_token(secret_id, token_resp["refresh_token"])
