@@ -1,0 +1,24 @@
+# The weekly full eval: every real brief three times, then the revision chats.
+# Run by the "solutioning-agent-weekly-evals" trigger on the schedule in
+# config.yaml (settings.evals.weekly_schedule). Never deploys anything; the
+# summary is emailed to settings.eval_summary_email and kept in the bucket.
+timeout: 18000s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+steps:
+  - id: weekly-evals
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install --quiet --root-user-action=ignore -r requirements-dev.txt
+        python -m deploy.render_config || exit 1
+        source deploy/out/deploy.env
+        export RENDER_URL EVAL_RESULTS_BUCKET EVAL_SUMMARY_EMAIL EVAL_DECK_FOLDER_ID
+        START=$$(date +%s)
+        bash evals/run.sh briefs "" 3 || true
+        bash evals/run.sh refinement || true
+        python -m evals.report --since "$$START" --label "weekly" || true

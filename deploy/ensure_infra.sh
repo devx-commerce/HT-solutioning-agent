@@ -16,7 +16,7 @@ say() { echo "[infra] $*"; }
 
 # --- secrets: these hold credentials, so they can only be checked, not made ---
 missing=()
-for name in $(python3 -c "import yaml;print(' '.join(yaml.safe_load(open('config.yaml'))['infrastructure']['secrets'].values()))"); do
+for name in $SECRET_NAMES; do
   gcloud secrets describe "$name" $P >/dev/null 2>&1 || missing+=("$name")
 done
 if (( ${#missing[@]} )); then
@@ -68,12 +68,38 @@ else
   say "created $SCHEDULER_JOB (paused; resume it when inboxes should be read)"
 fi
 
+# --- evals in Cloud Build run as the runtime account and call the private renderer ---
+gcloud run services add-iam-policy-binding "$RENDERER_SERVICE" $P --region="$REGION" \
+  --member="serviceAccount:$RUNTIME_SA" --role=roles/run.invoker >/dev/null 2>&1 \
+  || say "renderer not deployed yet; its invoker is granted on the next deploy"
+
 # --- where eval results are kept ---
 if ! gcloud storage buckets describe "gs://$EVAL_RESULTS_BUCKET" $P >/dev/null 2>&1; then
   gcloud storage buckets create "gs://$EVAL_RESULTS_BUCKET" $P --location=US \
     --uniform-bucket-level-access >/dev/null
   gcloud storage buckets update "gs://$EVAL_RESULTS_BUCKET" --update-labels="$LABEL" >/dev/null
   say "created bucket $EVAL_RESULTS_BUCKET"
+fi
+
+# --- the weekly full eval: a scheduler job that runs the "weekly evals" trigger ---
+# The trigger itself is made once in the Cloud Build console, after the GitHub
+# repository is connected (docs/operations/deploy.md); until then this waits.
+TRIGGER="solutioning-agent-weekly-evals"
+TRIGGER_ID=$(gcloud builds triggers describe "$TRIGGER" $P --region=global --format='value(id)' 2>/dev/null || true)
+if [[ -n "$TRIGGER_ID" ]]; then
+  URI="https://cloudbuild.googleapis.com/v1/projects/$PROJECT_ID/locations/global/triggers/$TRIGGER_ID:run"
+  if gcloud scheduler jobs describe "$TRIGGER" $P --location="$REGION" >/dev/null 2>&1; then
+    gcloud scheduler jobs update http "$TRIGGER" $P --location="$REGION" \
+      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" >/dev/null
+  else
+    gcloud scheduler jobs create http "$TRIGGER" $P --location="$REGION" \
+      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" \
+      --uri="$URI" --http-method=POST --message-body='{"branchName":"prod"}' \
+      --oauth-service-account-email="$RUNTIME_SA" >/dev/null
+    say "scheduled $TRIGGER ($WEEKLY_EVAL_SCHEDULE, India time)"
+  fi
+else
+  say "weekly evals not scheduled yet: create the $TRIGGER trigger first"
 fi
 
 say "done"

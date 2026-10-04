@@ -1,0 +1,97 @@
+# Deploy the whole Solutioning Agent from config.yaml, then run the
+# after-deploy evals. Run it with the trigger in the Cloud Build console, or:
+#
+#   gcloud builds submit --config deploy/cloudbuild.yaml \
+#     --service-account=projects/PROJECT_ID/serviceAccounts/PROJECT_NUMBER-compute@developer.gserviceaccount.com
+#
+# Steps stop the deploy only for a real problem (a failing test, an invalid
+# config.yaml, a missing secret, a failed deploy). Evals never stop it: their
+# summary is emailed and kept in the eval results bucket.
+timeout: 7200s
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+steps:
+  - id: test-and-config
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install --quiet --root-user-action=ignore -r requirements-dev.txt
+        python -m pytest -q
+        python -m deploy.render_config
+
+  - id: infrastructure
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args: [deploy/ensure_infra.sh]
+
+  - id: renderer
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        source deploy/out/deploy.env
+        gcloud run deploy "$$RENDERER_SERVICE" --source renderer --project "$$PROJECT_ID" --region "$$REGION" \
+          --no-allow-unauthenticated --labels app=solutioning-agent \
+          --memory 1Gi --cpu 1 --concurrency 4 --max-instances 3 --timeout 120 --quiet
+
+  - id: services
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        source deploy/out/deploy.env
+        # The email pipeline: private, one build per instance.
+        gcloud run deploy "$$PIPELINE_SERVICE" --source . --project "$$PROJECT_ID" --region "$$REGION" \
+          --no-allow-unauthenticated --labels app=solutioning-agent \
+          --env-vars-file deploy/out/pipeline.env.yaml \
+          --set-secrets "STATE_SIGNING_KEY=$$STATE_KEY_SECRET:latest" \
+          --memory 1Gi --concurrency 1 --max-instances 3 --timeout 600 --quiet
+        # The onboarding page: the same image, public, so people can connect an inbox.
+        IMAGE=$$(gcloud run services describe "$$PIPELINE_SERVICE" --project "$$PROJECT_ID" --region "$$REGION" \
+          --format 'value(spec.template.spec.containers[0].image)')
+        gcloud run deploy "$$ONBOARDING_SERVICE" --image "$$IMAGE" --project "$$PROJECT_ID" --region "$$REGION" \
+          --allow-unauthenticated --labels app=solutioning-agent \
+          --env-vars-file deploy/out/onboarding.env.yaml \
+          --set-secrets "STATE_SIGNING_KEY=$$STATE_KEY_SECRET:latest" \
+          --memory 512Mi --timeout 300 --quiet
+
+  - id: agent
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        source deploy/out/deploy.env
+        pip install --quiet --root-user-action=ignore -r requirements-dev.txt
+        # Updates the live engine in place: same id, so Gemini Enterprise and
+        # the email pipeline keep pointing at it.
+        adk deploy agent_engine --project "$$PROJECT_ID" --region "$$REGION" \
+          --agent_engine_id "$$AGENT_ENGINE_ID" --display_name "Solutioning Agent" \
+          --description "Builds a first-draft solution deck for an inbound advertising request." \
+          agents/solutioning_agent
+
+  - id: evals
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        source deploy/out/deploy.env
+        export RENDER_URL EVAL_RESULTS_BUCKET EVAL_SUMMARY_EMAIL EVAL_DECK_FOLDER_ID
+        if [ "$$EVALS_AFTER_DEPLOY" = "none" ]; then echo "evals skipped (config.yaml)"; exit 0; fi
+        pip install --quiet --root-user-action=ignore -r requirements-dev.txt
+        START=$$(date +%s)
+        if [ "$$EVALS_AFTER_DEPLOY" = "full" ]; then CASES=""; else CASES="$$SMOKE_CASES"; fi
+        bash evals/run.sh briefs "$$CASES" 1 || echo "eval run reported problems; see the summary"
+        python -m evals.report --since "$$START" --label "after deploy" || true
+        exit 0

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -98,10 +97,11 @@ def _secret_path(i: dict, name: str) -> str:
 
 
 def _secret_value(i: dict, name: str) -> str:
-    return subprocess.run(
-        ["gcloud", "secrets", "versions", "access", "latest", f"--secret={name}", f"--project={i['project_id']}"],
-        check=True, capture_output=True, text=True,
-    ).stdout.strip()
+    from google.cloud import secretmanager
+
+    client = secretmanager.SecretManagerServiceClient()
+    path = f"projects/{i['project_id']}/secrets/{name}/versions/latest"
+    return client.access_secret_version(name=path).payload.data.decode("utf-8").strip()
 
 
 def agent_env(cfg: dict, youtube_key: str) -> dict[str, str]:
@@ -188,6 +188,7 @@ def deploy_env(cfg: dict) -> dict[str, str]:
         "SCHEDULER_JOB": i["scheduler_job"],
         "SWEEP_SCHEDULE": s["sweep_schedule"],
         "STATE_KEY_SECRET": i["secrets"]["state_key"],
+        "SECRET_NAMES": " ".join(i["secrets"].values()),
         "EVAL_SUMMARY_EMAIL": s["eval_summary_email"],
         "EVALS_AFTER_DEPLOY": s["evals"]["after_deploy"],
         "SMOKE_CASES": ",".join(s["evals"]["smoke_cases"]),
