@@ -12,7 +12,7 @@ one expensive step, the Agent Engine invocation, plus everything after it
 the service bound how many of these run at once; see pubsub.py for why
 that split exists now rather than later.
 
-See docs/EMAIL-POLLER-DESIGN.md for the reasoning behind every decision
+See developer-docs/EMAIL-POLLER-DESIGN.md for the reasoning behind every decision
 here — this module is the implementation of that doc, not a second copy.
 
 Two testing knobs on the classify-and-enqueue half, both off by default:
@@ -150,7 +150,7 @@ def _list_branch_b(gmail) -> list[str]:
 def _thread_lock_reason(existing_thread: dict | None, triggered_by: str) -> str | None:
     """None means proceed, otherwise the reason it's blocked.
 
-    See docs/EMAIL-POLLER-DESIGN.md "Thread locking" for the full rule table
+    See developer-docs/EMAIL-POLLER-DESIGN.md "Thread locking" for the full rule table
     and rationale — this is the implementation of that table, not a second
     copy of it.
     """
@@ -173,7 +173,7 @@ def _process_branch_a(
     msg = mail_utils.fetch_message(gmail, message_id)
 
     # Always checked, regardless of force — force only re-runs classification;
-    # it never bypasses the thread lock (see docs/EMAIL-POLLER-DESIGN.md).
+    # it never bypasses the thread lock (see developer-docs/EMAIL-POLLER-DESIGN.md).
     existing_thread = storage.thread_status(msg.thread_id)
     lock_reason = _thread_lock_reason(existing_thread, "branch_a")
     if lock_reason is not None:

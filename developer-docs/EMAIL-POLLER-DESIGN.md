@@ -125,7 +125,7 @@ re-consent once this scope is added — a one-time cost, not an ongoing one.
 
 Doesn't exist yet. Created once, by hand — same pattern as the Slides
 template used to be (`TEMPLATE_FILE_ID`, now obsolete — see
-[`docs/research-and-rendering-decisions.md`](research-and-rendering-decisions.md#7-deck-rendering-presentation-md-deck-json-as-system-of-record)):
+[`developer-docs/research-and-rendering-decisions.md`](research-and-rendering-decisions.md#7-deck-rendering-presentation-md-deck-json-as-system-of-record)):
 one human-made artifact, referenced by id (`BRIEFS_SHEET_ID`), not generated
 from code. The agent only ever appends rows to a sheet that already exists.
 

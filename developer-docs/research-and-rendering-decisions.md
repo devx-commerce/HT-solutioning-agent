@@ -135,7 +135,7 @@ with sources), the gaps/open-questions identified, and the draft deck link —
 using the SOW's own terms ("evidence summary," "gaps").
 
 Deprioritized/deferred items (Competitor Analysis Tool, Salesforce, image
-generation, etc.) live in `docs/open-items.md`, not here.
+generation, etc.) live in `developer-docs/open-items.md`, not here.
 
 ## BigQuery
 
@@ -185,7 +185,7 @@ error is fed back and it self-corrects.
 - `bigquery/schema.sql`: `deck_json`/`research_brief` columns added to the
   `CREATE TABLE` statement (does not touch the already-existing live table —
   see plan below).
-- `README.md`, `docs/EMAIL-POLLER-DESIGN.md`, `archive/deck-agent-v1/README.md`:
+- `README.md`, `developer-docs/EMAIL-POLLER-DESIGN.md`, `developer-docs/archive/deck-agent-v1/README.md`:
   pointers added so the obsolete template/orchestrator-split framing isn't
   mistaken for current.
 

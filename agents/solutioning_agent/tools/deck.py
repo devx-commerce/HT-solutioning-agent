@@ -567,7 +567,7 @@ async def _latest_uploaded_image(tool_context) -> tuple[bytes, str] | None:
     """The newest image the person attached: this message, earlier ones, artifacts.
 
     How Gemini Enterprise hands an uploaded file to an Agent Engine agent is
-    unconfirmed (docs/open-items.md), so every shape ADK can deliver one in
+    unconfirmed (developer-docs/open-items.md), so every shape ADK can deliver one in
     is tried: inline bytes on a message part, a file reference on one, or a
     saved artifact.
     """

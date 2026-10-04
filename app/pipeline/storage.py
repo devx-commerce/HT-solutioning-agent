@@ -4,7 +4,7 @@ Three concerns, three tables: the watermark (sweep_state), message-level
 idempotency and audit (decisions), thread-level intake tracking
 (ingestion_threads — deliberately separate from whatever the agent's own
 tools record in `briefs` about a built deck). See
-docs/EMAIL-POLLER-DESIGN.md for why BigQuery, including the honest tradeoff
+developer-docs/EMAIL-POLLER-DESIGN.md for why BigQuery, including the honest tradeoff
 against a point-lookup-shaped store like Firestore.
 """
 

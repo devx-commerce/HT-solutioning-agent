@@ -22,7 +22,7 @@ PUBLIC_ROUTES_ONLY controls which routes actually get registered — on the
 onboarding deployment, /sweep etc. don't just go unprotected, they don't
 exist at all (a request to them 404s). This is the "no way to get it wrong"
 property that made us choose two services over one service with an in-code
-auth check: see docs/EMAIL-POLLER-DESIGN.md for the reasoning.
+auth check: see developer-docs/EMAIL-POLLER-DESIGN.md for the reasoning.
 
 Two identity models still live side by side underneath both:
   - Drive/Slides: one shared identity (oauth_creds.py), bootstrapped once.
@@ -111,7 +111,7 @@ def status() -> dict:
 def sweep(force: bool = False, dry_run: bool = False) -> dict:
     """Run the ingestion pipeline against every onboarded mailbox.
 
-    See docs/EMAIL-POLLER-DESIGN.md and ingestion.py for the actual logic —
+    See developer-docs/EMAIL-POLLER-DESIGN.md and ingestion.py for the actual logic —
     watermark-bounded classification (Branch A) plus the always-included
     manual-label override (Branch B). A stale/revoked token degrades that
     one user's row (mark_reauthorization_required) rather than failing the

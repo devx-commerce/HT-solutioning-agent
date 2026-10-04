@@ -170,7 +170,7 @@ def _store_refresh_token(secret_id: str, refresh_token: str) -> None:
         # deployment both Cloud Run services (this one, and the private
         # one that later reads this secret via gmail_client.py) run as
         # the same service account. Missing this silently broke every
-        # first sweep after onboarding — see docs/logs/ for the incident.
+        # first sweep after onboarding — see developer-docs/logs/ for the incident.
         # google.auth.default()'s credentials object doesn't reliably expose
         # the running service account's actual email — ask the metadata
         # server directly, the standard way to get it on Cloud Run/GCE.

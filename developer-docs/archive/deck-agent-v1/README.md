@@ -1,6 +1,6 @@
 # Archived — deck generator v1 design docs (superseded)
 
-**This is an archive. The live plan is [`docs/deck-agent-plan.md`](../../docs/deck-agent-plan.md).**
+**This is an archive. The live plan is [`developer-docs/deck-agent-plan.md`](../../developer-docs/deck-agent-plan.md).**
 
 The 10 docs here laid out building a deck compiler from scratch on the raw
 Slides API — real research, but superseded 2026-09-23 by the decision to
@@ -28,7 +28,7 @@ the rendering-engine supersession above: the live design keeps one agent
 drafting via a single tool-calling loop rather than a separate research
 orchestrator handing off to a deck subagent. The "no research, don't invent
 evidence" *discipline* still holds — see
-[`docs/research-and-rendering-decisions.md`](../../docs/research-and-rendering-decisions.md)
+[`developer-docs/research-and-rendering-decisions.md`](../../developer-docs/research-and-rendering-decisions.md)
 for the current architecture and the loose (non-`DeckBrief`) research output
 shape.
 
@@ -46,10 +46,10 @@ shape.
 | [06](06-images.md) | **Images** | Generation, style consistency, contrast guard |
 | [07](07-quality.md) | **Quality** | Tier A geometry, terminal VLM loop |
 | [08](08-lifecycle.md) | **Lifecycle** | Locking, states, conservative refinement — this philosophy (deck locked while the agent owns it, conservative refinement) still applies regardless of what renders the deck, worth keeping in mind even though the compiler itself is superseded |
-| [09](09-mvp.md) | **MVP** | Scope, build order, timeline, cuts — superseded by docs/deck-agent-plan.md's own scope/testing plan |
+| [09](09-mvp.md) | **MVP** | Scope, build order, timeline, cuts — superseded by developer-docs/deck-agent-plan.md's own scope/testing plan |
 | [10](10-risks.md) | **Risks** | What to verify before building on it — §1 (`drive.file` may not be able to copy the template) turned out to be real, confirmed live 2026-09-23 |
 
-## The decisions, in one page (archived — see docs/deck-agent-plan.md for what's actually being built)
+## The decisions, in one page (archived — see developer-docs/deck-agent-plan.md for what's actually being built)
 
 **Build it, on Google's open stack.** Gemini-in-Slides already does this well
 and has no API. Everything else Google ships is substrate, not capability.

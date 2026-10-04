@@ -1,7 +1,7 @@
 # Deprioritized and open items
 
 Running catch-all so deferred/unresolved things don't get lost. Not a status
-tracker for in-progress work — see `docs/research-and-rendering-decisions.md`
+tracker for in-progress work — see `developer-docs/research-and-rendering-decisions.md`
 for the active plan. Add to this file whenever something comes up that isn't
 being acted on right now.
 

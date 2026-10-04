@@ -39,7 +39,7 @@ def append_row(
     row = [
         client_name or "",
         "",  # Solution Pillar — never filled, no taxonomy to classify against
-        category or "",  # tentative — see docs/EMAIL-POLLER-DESIGN.md
+        category or "",  # tentative — see developer-docs/EMAIL-POLLER-DESIGN.md
         "",  # Closure Status — human-owned, never agent-written
         "",  # AM/CH — no reliable signal from mailbox arrival
         "",  # GH — same reasoning as AM/CH

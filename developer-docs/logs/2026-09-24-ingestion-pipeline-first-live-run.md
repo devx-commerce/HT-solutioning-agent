@@ -98,7 +98,7 @@ the briefs Sheet, before it was caught.
 
 **Real fix, not just cleanup:** `force` no longer bypasses the thread
 lock — only message-level re-classification. See the thread-locking
-rules (below, and in `docs/EMAIL-POLLER-DESIGN.md`) for what actually
+rules (below, and in `developer-docs/EMAIL-POLLER-DESIGN.md`) for what actually
 gates a real build now, independent of `force`.
 
 ## Thread-locking redesign (2026-09-25)
@@ -114,7 +114,7 @@ working: what happens when a thread has several messages, and is a
 - A single failure (e.g. a transient bug, an API hiccup) permanently
   blocked every future message in that thread, with no retry path at all.
 
-Full rule table and reasoning now lives in `docs/EMAIL-POLLER-DESIGN.md`
+Full rule table and reasoning now lives in `developer-docs/EMAIL-POLLER-DESIGN.md`
 under "Thread locking." Short version: a human's manual `generate-deck`
 label always overrides an already-`built` thread; a `failed` thread is
 always retryable by either branch; classification and the build prompt

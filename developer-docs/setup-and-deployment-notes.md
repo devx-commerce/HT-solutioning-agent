@@ -4,7 +4,7 @@ Built component by component, against real infra from day one — every
 permission and entitlement failure happens now, against the actual project,
 not mid-timeline. The inbox poller, classification, and the solutioning briefs
 sheet are real and running; deck generation is still a placeholder while
-`docs/deck-agent-plan.md` gets built out as its own piece (superseded original design in `archive/deck-agent-v1/`).
+`developer-docs/deck-agent-plan.md` gets built out as its own piece (superseded original design in `developer-docs/archive/deck-agent-v1/`).
 
 Runs in **HT's GCP project** (`academic-diode-477405-m3`, confirmed inside
 an organization — id `387062944839`, HT's own Cloud Identity). Auth is
@@ -27,7 +27,7 @@ devxlabs.ai` only needs project IAM, not an OAuth grant.
     -d '{"permissions":["the.permission.you.need"]}'
   ```
 
-Point-in-time record — see [`docs/logs/`](docs/logs/) for the dated ground
+Point-in-time record — see [`developer-docs/logs/`](developer-docs/logs/) for the dated ground
 truth on what's actually granted.
 
 ## 1 — APIs
@@ -137,7 +137,7 @@ Six tables: `briefs`, `decisions`, `users`, `sweep_state` (the watermark),
 2026-09-23 from three originally-separate, unused tables — `handoffs`,
 `retrieval_log`, and a narrower `audit_log` — into one flexible
 `event_type` + JSON `detail` shape; nothing writes to it yet). See
-[`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md) for why
+[`developer-docs/EMAIL-POLLER-DESIGN.md`](developer-docs/EMAIL-POLLER-DESIGN.md) for why
 `sweep_state`/`ingestion_threads` exist.
 
 ## 5 — Deck rendering, and the solutioning briefs sheet
@@ -147,12 +147,12 @@ rendered from Deck JSON by `presentation-md` and uploaded to Drive, which
 converts the pptx to native Slides. Point `PRESENTATION_MD_CLI` at that
 repo's `packages/renderer-node/dist/cli.js`, and set `DECK_READER_DOMAIN` so
 generated decks are readable by the domain. See
-[`docs/research-and-rendering-decisions.md`](docs/research-and-rendering-decisions.md)
+[`developer-docs/research-and-rendering-decisions.md`](developer-docs/research-and-rendering-decisions.md)
 — including the unresolved question of where Node runs once deployed.
 
 Create the solutioning briefs Sheet by hand,
 header row matching the nine columns in
-[`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md), share it with
+[`developer-docs/EMAIL-POLLER-DESIGN.md`](developer-docs/EMAIL-POLLER-DESIGN.md), share it with
 `sales.agent@hindustantimes.com` as an Editor, and copy its id into
 `BRIEFS_SHEET_ID`. The agent only ever appends rows to it — nothing here
 creates or formats the sheet itself.
@@ -257,7 +257,7 @@ concurrently. The load here (~100 emails/week) is low on average but not
 uniformly spread, so a burst day could otherwise fire many Agent Engine
 sessions at once from one `/sweep` call; a queue plus a capped consumer
 controls that independent of how many are queued. See
-[`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md).
+[`developer-docs/EMAIL-POLLER-DESIGN.md`](developer-docs/EMAIL-POLLER-DESIGN.md).
 
 **Create the subscription before anything ever publishes to the topic** —
 a message published to a topic with no subscription yet is simply dropped,
@@ -434,7 +434,7 @@ taxonomy, and an AM/GH lookup table are still deliberately deferred.
 ## The ingestion pipeline: classification, threads, the briefs sheet
 
 Full design and reasoning in
-[`docs/EMAIL-POLLER-DESIGN.md`](docs/EMAIL-POLLER-DESIGN.md) —
+[`developer-docs/EMAIL-POLLER-DESIGN.md`](developer-docs/EMAIL-POLLER-DESIGN.md) —
 `app/pipeline/ingestion.py` is its implementation, not a second copy of the same
 decisions. Three things worth knowing before running it:
 
@@ -463,12 +463,12 @@ themes). That fork is developed entirely as its own separate project at
 submodule — and only enters `HT-solutioning-agent` later, as a consumed
 package/build artifact once it's tested and fixed.
 
-Full plan: [`docs/deck-agent-plan.md`](docs/deck-agent-plan.md)
+Full plan: [`developer-docs/deck-agent-plan.md`](developer-docs/deck-agent-plan.md)
 — confirmed bugs found in the fork so far, the fix list, what to keep/cut
 from its packages, and the testing plan.
 
 The original build-from-scratch design is archived in
-[`archive/deck-agent-v1/`](archive/deck-agent-v1/) — superseded for how the
+[`developer-docs/archive/deck-agent-v1/`](developer-docs/archive/deck-agent-v1/) — superseded for how the
 deck gets rendered, but its README notes two pieces still worth reading
 (the scope-bug prediction in `10-risks.md` §1, and the locking/ownership
 model in `08-lifecycle.md`).

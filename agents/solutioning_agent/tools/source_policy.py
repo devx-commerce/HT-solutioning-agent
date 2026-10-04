@@ -7,7 +7,7 @@ before the agent sees it. The agent's instruction names the same outlets,
 generated from `OUTLETS`, so it doesn't name them in prose either.
 
 The list is an assumption agreed for the pilot, not one HT has confirmed;
-docs/open-items.md tracks it for review. Change it here and nowhere else.
+developer-docs/open-items.md tracks it for review. Change it here and nowhere else.
 """
 
 from __future__ import annotations

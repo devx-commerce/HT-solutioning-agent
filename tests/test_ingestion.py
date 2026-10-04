@@ -4,7 +4,7 @@ Scope is deliberately narrow: these rules were the actual source of two
 real incidents (every reply after the first was silently ignored forever;
 a single failure locked a thread out permanently), so this file exists to
 pin the exact state-transition table down, not to be a general-purpose
-test suite for the whole ingestion pipeline. See docs/EMAIL-POLLER-DESIGN.md
+test suite for the whole ingestion pipeline. See developer-docs/EMAIL-POLLER-DESIGN.md
 "Thread locking" for the rules in prose.
 """
 

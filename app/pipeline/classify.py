@@ -29,7 +29,7 @@ MODEL = os.environ.get("CLASSIFY_MODEL", "gemini-2.5-flash-lite")
 
 # Touchpoints must map to one of these or stay blank — never a free-text
 # guess. Category is deliberately the same shape even though whether it
-# should be attempted at all is still open — see docs/EMAIL-POLLER-DESIGN.md.
+# should be attempted at all is still open — see developer-docs/EMAIL-POLLER-DESIGN.md.
 TOUCHPOINTS = ["Print", "Digital", "Integrated", "Events"]
 
 _CLASSIFY_SCHEMA = types.Schema(

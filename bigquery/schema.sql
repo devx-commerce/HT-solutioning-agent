@@ -1,10 +1,10 @@
 -- The solutioning agent's tables, built out one piece at a time.
 -- Run once via bq query, with --parameter substitution or a sed pass for
--- PROJECT/DATASET — see README.md for the exact command.
+-- PROJECT/DATASET — see developer-docs/setup-and-deployment-notes.md for the exact command.
 
 -- deck_json and research_brief are the system-of-record columns for the
 -- presentation-md rendering pipeline and the research step (see
--- docs/research-and-rendering-decisions.md). Both are JSON stored as STRING
+-- developer-docs/research-and-rendering-decisions.md). Both are JSON stored as STRING
 -- rather than BigQuery JSON type, matching the loose/free-form shape decided
 -- for research_brief and the presentation-md deck.schema.json shape for
 -- deck_json. Both nullable — not every existing row will have them, and a
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.audit_log` (
 -- last_swept_at as its `after:` cutoff instead of a fixed rolling window,
 -- so a skipped or failed sweep gets caught by the next successful one
 -- instead of silently losing whatever arrived during the gap. See
--- docs/EMAIL-POLLER-DESIGN.md.
+-- developer-docs/EMAIL-POLLER-DESIGN.md.
 CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.sweep_state` (
   id STRING NOT NULL,
   last_swept_at TIMESTAMP
