@@ -46,16 +46,19 @@ A full deploy takes about 20 minutes, plus 15 for smoke evals.
 The pipeline's files don't name a repository, so moving to another GitHub
 organisation only means repeating these steps.
 
-1. Cloud Build > Repositories > **Connect repository**, choose GitHub, and
-   authorise the Cloud Build GitHub app for the repository.
-2. Cloud Build > Triggers > **Create trigger**:
+1. Cloud Build > Repositories > **2nd gen**, region `us-central1`:
+   **Create host connection**, provider GitHub, name `github`. Authorise
+   it, and install the Cloud Build GitHub app on the organisation with
+   access to this repository only. Then **Link repository** and pick it.
+2. Cloud Build > Triggers, region `us-central1` > **Create trigger**:
    - Name: `solutioning-agent-deploy`
-   - Event: push to branch, branch `^prod$`
+   - Event: push to a branch; repository generation 2nd gen, this
+     repository, branch `^prod$`
    - Configuration: Cloud Build configuration file, `deploy/cloudbuild.yaml`
    - Service account: `296974829876-compute@developer.gserviceaccount.com`
-3. Create a second trigger:
+3. Create a second trigger, also in `us-central1`:
    - Name: `solutioning-agent-weekly-evals`
-   - Event: manual invocation, branch `prod`
+   - Event: manual invocation; same repository, branch `prod`
    - Configuration: `deploy/cloudbuild-evals.yaml`
    - Same service account
 4. Deploy once. The infrastructure step sees the weekly trigger and creates

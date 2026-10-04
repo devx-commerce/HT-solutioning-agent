@@ -82,19 +82,21 @@ if ! gcloud storage buckets describe "gs://$EVAL_RESULTS_BUCKET" $P >/dev/null 2
 fi
 
 # --- the weekly full eval: a scheduler job that runs the "weekly evals" trigger ---
-# The trigger itself is made once in the Cloud Build console, after the GitHub
-# repository is connected (docs/operations/deploy.md); until then this waits.
+# The trigger itself is made once in the Cloud Build console (2nd gen, in
+# $REGION), after the GitHub repository is connected
+# (docs/operations/deploy.md); until then this waits.
 TRIGGER="solutioning-agent-weekly-evals"
-TRIGGER_ID=$(gcloud builds triggers describe "$TRIGGER" $P --region=global --format='value(id)' 2>/dev/null || true)
+TRIGGER_ID=$(gcloud builds triggers describe "$TRIGGER" $P --region="$REGION" --format='value(id)' 2>/dev/null || true)
 if [[ -n "$TRIGGER_ID" ]]; then
-  URI="https://cloudbuild.googleapis.com/v1/projects/$PROJECT_ID/locations/global/triggers/$TRIGGER_ID:run"
+  URI="https://cloudbuild.googleapis.com/v1/projects/$PROJECT_ID/locations/$REGION/triggers/$TRIGGER_ID:run"
   if gcloud scheduler jobs describe "$TRIGGER" $P --location="$REGION" >/dev/null 2>&1; then
     gcloud scheduler jobs update http "$TRIGGER" $P --location="$REGION" \
-      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" >/dev/null
+      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" \
+      --uri="$URI" --message-body='{}' >/dev/null
   else
     gcloud scheduler jobs create http "$TRIGGER" $P --location="$REGION" \
       --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" \
-      --uri="$URI" --http-method=POST --message-body='{"branchName":"prod"}' \
+      --uri="$URI" --http-method=POST --message-body='{}' \
       --oauth-service-account-email="$RUNTIME_SA" >/dev/null
     say "scheduled $TRIGGER ($WEEKLY_EVAL_SCHEDULE, India time)"
   fi
