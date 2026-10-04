@@ -1,6 +1,6 @@
 """Self-serve Gmail onboarding — the pattern copied from commercial-context-layer-GE.
 
-One URL, one click, per account manager. Nobody runs a script on anyone
+One URL, one click, per team member. Nobody runs a script on anyone
 else's behalf, and nothing here needs a Workspace admin: each person's own
 "Allow" is the entire grant. What it produces — a per-user Secret Manager
 secret holding their refresh token, and a row in BigQuery mapping their
@@ -90,7 +90,7 @@ def _verify_state(state: str) -> str:
 
 
 def build_auth_url(redirect_uri: str) -> str:
-    """The URL an account manager visits to onboard their own mailbox."""
+    """The URL a team member visits to onboard their own mailbox."""
     material = _client_material()
     params = {
         "client_id": material["client_id"],

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 1190" width="1420" height="1190" role="img" aria-label="Architecture of the HT solutioning agent. Account managers connect their inboxes through the onboarding page. Every 30 minutes a scheduler calls the sweep on Cloud Run, which reads each inbox, filters noise, deduplicates, classifies requests and queues builds on Pub/Sub. Each queued build calls the Solutioning Agent on Vertex AI Agent Engine, then labels the email, sends a notification and adds a row to the briefs sheet. Gemini Enterprise chat calls the same agent. The agent researches with HT's past decks, Google Search, YouTube and web pages, then builds a deck: rules, logos and generated images, rendering on a Cloud Run renderer, and upload to Google Drive as read-only Slides, with the deck saved in BigQuery for later revisions.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 1190" width="1420" height="1190" role="img" aria-label="Architecture of the HT solutioning agent. Solutioning team members connect their inboxes through the onboarding page. Every 30 minutes a scheduler calls the sweep on Cloud Run, which reads each inbox, filters noise, deduplicates, classifies requests and queues builds on Pub/Sub. Each queued build calls the Solutioning Agent on Vertex AI Agent Engine, then labels the email, sends a notification and adds a row to the briefs sheet. Gemini Enterprise chat calls the same agent. The agent researches with HT's past decks, Google Search, YouTube and web pages, then builds a deck: rules, logos and generated images, rendering on a Cloud Run renderer, and upload to Google Drive as read-only Slides, with the deck saved in BigQuery for later revisions.">
         <style>
   .band{fill:#eef2f4} .bt{font:600 12px Helvetica,Arial,sans-serif;letter-spacing:.06em;fill:#0e6e8c}
   .bx{fill:#ffffff;stroke:#17212b;stroke-width:1.2} .t{font:600 12.5px Helvetica,Arial,sans-serif;fill:#17212b}
@@ -14,7 +14,7 @@
         <rect class="band" x="4" y="6" width="1412" height="160" rx="6"/>
         <text class="bt" x="20" y="28">WHO USES IT AND HOW</text>
         <rect class="bx" x="20" y="44" width="290" height="100" rx="4"/>
-        <text class="t" x="32" y="64">Account managers' Gmail inboxes</text>
+        <text class="t" x="32" y="64">Solutioning team's Gmail inboxes</text>
         <text class="s" x="32" y="81">Client briefs arrive here as normal email.</text>
         <text class="s" x="32" y="97">Label an email <tspan class="m">generate-deck</tspan> to force a build.</text>
         <text class="s" x="32" y="113">Built requests get the label</text>

@@ -1,10 +1,10 @@
 # Solutioning Agent
 
-The Solutioning Agent drafts first-version solution decks for HT Media's sales
-and solutioning teams. When a client brief arrives in an account manager's
-inbox, the agent reads it, researches the client, its competitors and HT's own
-past proposals, and builds a Google Slides deck in HT's house style. It then
-emails the account manager a link to the deck with the evidence behind it.
+The Solutioning Agent drafts first-version solution decks for HT Media's
+solutioning team. When a client brief arrives in a team member's inbox, the
+agent reads it, researches the client, its competitors and HT's own past
+proposals, and builds a Google Slides deck in HT's house style. It then
+emails that inbox a link to the deck with the evidence behind it.
 The same agent is available in Gemini Enterprise chat, where people can build
 decks from a pasted brief and revise them in conversation.
 
@@ -13,7 +13,7 @@ edits and prices every deck before it goes to a client.
 
 ## What it does
 
-- **Reads briefs from email.** Account managers connect their inbox once.
+- **Reads briefs from email.** Solutioning team members connect their inbox once.
   Every 30 minutes the agent checks connected inboxes for new client briefs,
   ignores everything else, and builds a deck for each brief it finds.
 - **Researches before drafting.** It searches HT's library of past pitch
@@ -33,7 +33,7 @@ edits and prices every deck before it goes to a client.
 
 | You want to | Read |
 |---|---|
-| Start using it (account managers, testers) | [docs/uat/user-guide.md](docs/uat/user-guide.md) |
+| Start using it (solutioning team members) | [docs/uat/user-guide.md](docs/uat/user-guide.md) |
 | Run the UAT week | [docs/uat/uat-plan.md](docs/uat/uat-plan.md) |
 | Understand how it fits together | [docs/architecture.md](docs/architecture.md) |
 | Know exactly what it can and can't do | [docs/how-it-works/](docs/how-it-works/) |

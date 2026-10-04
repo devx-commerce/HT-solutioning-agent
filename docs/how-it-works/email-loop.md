@@ -39,7 +39,7 @@ minutes, depending on where in the 30-minute cycle it arrived.
 ## What it never does
 
 - It never replies on the client thread, never emails anyone outside HT, and
-  never sends from the account manager's inbox.
+  never sends from a team member's inbox.
 - It never moves, deletes or marks email read. The only visible change is the
   `deck-generated` label.
 - It never reads attachments. The brief has to be in the email text. A brief

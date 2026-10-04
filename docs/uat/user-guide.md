@@ -1,7 +1,7 @@
 # Solutioning Agent: user guide
 
-This guide is for account managers and solutioning team members using the
-Solutioning Agent for the first time. It takes about five minutes to read.
+This guide is for solutioning team members using the Solutioning Agent for
+the first time. It takes about five minutes to read.
 
 ## What it is, in one paragraph
 

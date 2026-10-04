@@ -1,6 +1,6 @@
 """Per-user Gmail access — the read side of self-serve onboarding.
 
-Every onboarded account manager gets their own Gmail client, built from
+Every onboarded team member gets their own Gmail client, built from
 their own stored refresh token. One shared OAuth client id/secret across
 everyone (from OAUTH_CLIENT_SECRET); only the refresh token differs per
 person, which is exactly the part gmail_oauth.py stored per-user.
@@ -42,7 +42,7 @@ def active_users() -> list[dict]:
 
 
 def get_service_for_user(gmail_secret: str):
-    """A Gmail API client authenticated as one onboarded account manager."""
+    """A Gmail API client authenticated as one onboarded team member."""
     material = _client_material()
     secret_client = secretmanager.SecretManagerServiceClient()
     refresh_token = secret_client.access_secret_version(name=gmail_secret).payload.data.decode(

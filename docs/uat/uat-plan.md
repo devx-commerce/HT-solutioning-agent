@@ -8,7 +8,7 @@ it meets the pilot's acceptance criteria and sign it off.
 
 | | |
 |---|---|
-| Who | Up to 8 account managers and solutioning team members |
+| Who | Solutioning team members |
 | How long | One working week |
 | Support | A 30-minute call every day of the week |
 | Testers read | [user-guide.md](user-guide.md) |
