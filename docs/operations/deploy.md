@@ -69,8 +69,8 @@ organisation only means repeating these steps.
 Moving to a different Google Cloud project also needs, before the first
 deploy: the APIs enabled (Cloud Run, Cloud Build, Vertex AI, Discovery Engine,
 BigQuery, Pub/Sub, Cloud Scheduler, Secret Manager, Gmail, Drive, Slides,
-Sheets, YouTube Data), the secrets created
-([access-and-credentials.md](access-and-credentials.md)), a Gemini Enterprise
+Sheets, YouTube Data), the secrets created and readable by the compute
+service account ([access-and-credentials.md](access-and-credentials.md)), a Gemini Enterprise
 app with the Drive connector over the past decks folder, and the
 `infrastructure` section of `config.yaml` updated. The first deploy then
 creates the rest. `agent_engine_id` must name an existing engine; for a brand

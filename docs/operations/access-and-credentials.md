@@ -56,6 +56,15 @@ appear in the BigQuery table `solutioning_agent.users`.
 | `solutioning-agent-state-key` | Any long random string; it signs onboarding links. Replacing it only invalidates links someone is part-way through. |
 | `solutioning-agent-youtube-key` | A YouTube Data API v3 key, restricted to that API. |
 
+When creating any of these secrets, or `solutioning-agent-oauth`, let the
+deploy and the services read it:
+
+```bash
+gcloud secrets add-iam-policy-binding <name> \
+  --member=serviceAccount:296974829876-compute@developer.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor
+```
+
 Add a new version with `gcloud secrets versions add <name> --data-file=<file>`.
 Never disable the latest version to "roll back": Secret Manager still serves
 the newest version even when it is disabled. Add a new version instead.
