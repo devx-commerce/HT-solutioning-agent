@@ -32,6 +32,8 @@ from html.parser import HTMLParser
 
 from google.cloud import bigquery
 
+from google.adk.tools.tool_context import ToolContext
+
 from ..oauth_creds import get_credentials
 from . import source_policy
 
@@ -309,7 +311,22 @@ def _clean_snippet(text: str) -> str:
     return html.unescape(_MARKUP_RE.sub("", text or "")).strip()
 
 
-def search_past_decks(query: str, brief_id: str) -> dict:
+# An eval case lists the Drive file id of HT's own deck for that brief under
+# this session-state key, so the agent can't find and copy the answer it is
+# being scored against. Real sessions never set it.
+EVAL_HIDDEN_DECKS_KEY = "eval_hidden_past_decks"
+
+
+def _hidden_deck_ids(tool_context) -> frozenset[str]:
+    state = getattr(tool_context, "state", None) if tool_context is not None else None
+    try:
+        hidden = state.get(EVAL_HIDDEN_DECKS_KEY) if state is not None else None
+    except Exception:  # noqa: BLE001 - a state lookup must never break search
+        hidden = None
+    return frozenset(h for h in (hidden or []) if isinstance(h, str))
+
+
+def search_past_decks(query: str, brief_id: str, tool_context: ToolContext = None) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 
     Args:
@@ -406,6 +423,7 @@ def search_past_decks(query: str, brief_id: str) -> dict:
         return {"results": [], "error": str(exc)[:300]}
 
     allowed = _past_deck_file_ids() if PAST_DECKS_FOLDER_ID else frozenset()
+    allowed = allowed - _hidden_deck_ids(tool_context)
     # A citation points at a reference by its index in this list, so the
     # position has to survive filtering — hence a dict keyed by index rather
     # than a list that would renumber once anything is dropped.
@@ -573,7 +591,53 @@ class _TextExtractor(HTMLParser):
             self.parts.append(text)
 
 
-def fetch_url(url: str, brief_id: str) -> dict:
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>)\]]+")
+
+
+def _host(url: str) -> str:
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+    return host[4:] if host.startswith("www.") else host
+
+
+def _hosts_seen(tool_context) -> set[str]:
+    """Every site the email or an earlier tool result in this conversation named."""
+    session = getattr(tool_context, "session", None)
+    texts = []
+    for event in getattr(session, "events", None) or []:
+        for part in getattr(getattr(event, "content", None), "parts", None) or []:
+            if getattr(part, "text", None):
+                texts.append(part.text)
+            response = getattr(getattr(part, "function_response", None), "response", None)
+            if response:
+                texts.append(json.dumps(response, ensure_ascii=False, default=str))
+    user = getattr(tool_context, "user_content", None)
+    for part in getattr(user, "parts", None) or []:
+        if getattr(part, "text", None):
+            texts.append(part.text)
+    return {_host(u) for t in texts for u in _URL_IN_TEXT.findall(t)} - {""}
+
+
+def url_was_given(url: str, tool_context) -> bool:
+    """Whether `url`'s site came from the email or a tool result, not a guess.
+
+    The instruction already says never to guess a domain; an eval run caught
+    the agent fetching uber.com/in/en/ anyway. Same site or a subdomain of
+    one either way counts (www.x.com and x.com/about). Without a tool
+    context (a direct call, a test) there is nothing to check against.
+    """
+    if tool_context is None:
+        return True
+    host = _host(url)
+    return bool(host) and any(
+        host == seen or host.endswith("." + seen) or seen.endswith("." + host)
+        for seen in _hosts_seen(tool_context)
+    )
+
+
+def fetch_url(url: str, brief_id: str, tool_context: ToolContext = None) -> dict:
     """Read one specific web page, typically the client's own site.
 
     Only call this with a url you already have: one from the email thread, or
@@ -594,6 +658,12 @@ def fetch_url(url: str, brief_id: str) -> dict:
         _log_retrieval(brief_id, "fetch_url", "error", started, url=url,
                        error="not an http(s) url")
         return {"url": url, "error": "Not a valid http(s) url."}
+    if not url_was_given(url, tool_context):
+        _log_retrieval(brief_id, "fetch_url", "error", started, url=url,
+                       error="url not from the email or a tool result")
+        return {"url": url, "error": "This site hasn't appeared in the email or any "
+                "search result in this conversation, so it may be a guess. Find the "
+                "page with search_web first and fetch the url it returns."}
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})

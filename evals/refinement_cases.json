@@ -1,0 +1,65 @@
+{
+  "_about": "Refinement-loop cases for evals/build_evalsets.py: scripted chats against decks seeded from fixtures/pentonic_deck.json by `python -m evals.reset_sandbox --seed-refinement`. Each case edits its own client's deck, because ADK runs cases in parallel. Fixture slide indices: 0 cover, 1 brief, 2 'Category landscape' stat-row, 3 big idea (image-hero), 4 overview, 5 Pentonic Wall Integration, 6 Pentonic Branded Kiosk, 7 Hindustan Editorials, 8 deliverables table, 9 execution schedule (timeline), 10 next steps, 11 closing.",
+  "seeds": [
+    {"brief_id": "eval-refine-pentonic-old", "client_name": "Pentonic", "title": "Pentonic Exam Season 2025"},
+    {"brief_id": "eval-refine-pentonic", "client_name": "Pentonic", "title": "Hindustan Fresh on Campus 2026"},
+    {"brief_id": "eval-refine-inkwell", "client_name": "Inkwell Stationery", "title": "Hindustan Fresh on Campus 2026"},
+    {"brief_id": "eval-refine-scribe", "client_name": "Scribe Pens", "title": "Hindustan Fresh on Campus 2026"},
+    {"brief_id": "eval-refine-nib", "client_name": "Nib and Co", "title": "Hindustan Fresh on Campus 2026"},
+    {"brief_id": "eval-refine-campus", "client_name": "Campus Pens Co", "title": "Hindustan Fresh on Campus 2026"},
+    {"brief_id": "eval-refine-quill", "client_name": "Quill Stationers", "title": "Hindustan Fresh on Campus 2026"}
+  ],
+  "cases": [
+    {
+      "eval_id": "refine-two-decks",
+      "turns": [{"text": "I need to make some changes to the Pentonic deck."}],
+      "rubrics": [
+        {"id": "two-decks-lists-both", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply lists both Pentonic decks (Pentonic Exam Season 2025 and Hindustan Fresh on Campus 2026) with when each last changed or its link, and asks which one the person means."},
+        {"id": "two-decks-no-edit", "type": "TOOL_USE_QUALITY", "text": "The agent called lookup_deck and did not call update_deck or place_image_from_chat, because it did not yet know which deck was meant."}
+      ]
+    },
+    {
+      "eval_id": "refine-structure",
+      "turns": [{"text": "In the Inkwell Stationery deck: delete the category landscape slide, move the execution schedule to come straight after the big idea, and add a new slide after the Hindustan Editorials slide about a campus creator contest, with a picture."}],
+      "rubrics": [
+        {"id": "structure-one-call", "type": "TOOL_USE_QUALITY", "text": "The agent read the deck with get_deck_outline, then made all three changes in a single update_deck call: a delete of the 'Category landscape' stat-row, a move of the execution schedule timeline to directly after the big idea, and an insert of a new slide about a campus creator contest directly after the Hindustan Editorials slide."},
+        {"id": "structure-indices-right", "type": "TOOL_USE_QUALITY", "text": "Each slide index in the update_deck edits points at the intended slide once the earlier edits in the same call are applied in order (for example, after deleting slide 2, the slides that followed it have moved up by one)."},
+        {"id": "structure-picture", "type": "TOOL_USE_QUALITY", "text": "The inserted slide uses a layout with a picture slot (two-column or image-hero), with \"image\" set to \"placeholder\" and an imageAlt describing a concrete scene."},
+        {"id": "structure-reply", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply says which slide was deleted, where the schedule moved to, and where the new contest slide was added, and gives the deck link."}
+      ]
+    },
+    {
+      "eval_id": "refine-picture-swap",
+      "turns": [{"text": "Change the picture on the big idea slide of the Scribe Pens deck to show students writing exam papers in a sunlit hall."}],
+      "rubrics": [
+        {"id": "swap-targets-big-idea", "type": "TOOL_USE_QUALITY", "text": "The agent's update_deck call changes only the big idea slide (index 3): it sets image to \"placeholder\" and imageAlt to a description of students writing exams in a sunlit hall, and edits no other slide or field."},
+        {"id": "swap-reply", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply says the big idea slide's picture was replaced and gives the deck link."}
+      ]
+    },
+    {
+      "eval_id": "refine-upload-rejected",
+      "turns": [{"text": "Use this photo as the picture on the big idea slide of the Nib and Co deck.", "image": "fixtures/upload_1024x768.jpg"}],
+      "rubrics": [
+        {"id": "reject-tool", "type": "TOOL_USE_QUALITY", "text": "The agent called place_image_from_chat for the big idea slide (index 3) and, when it returned rejected, did not try to place the image another way or call update_deck."},
+        {"id": "reject-reason-relayed", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply tells the person the photo was not used and why: it is 1024×768, too small for the slot and the wrong shape (4:3 against a 16:9 slot), and says what would work instead (a 16:9 image, ideally 1920×1080)."}
+      ]
+    },
+    {
+      "eval_id": "refine-upload-placed",
+      "turns": [{"text": "Use this photo as the picture on the big idea slide of the Campus Pens Co deck.", "image": "fixtures/upload_1344x768.jpg"}],
+      "rubrics": [
+        {"id": "place-tool", "type": "TOOL_USE_QUALITY", "text": "The agent called place_image_from_chat with target slide_image for the big idea slide (index 3), and it returned placed."},
+        {"id": "place-reply", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply says the person's photo is now on the big idea slide and gives the deck link."}
+      ]
+    },
+    {
+      "eval_id": "refine-text-and-table",
+      "turns": [{"text": "In the Quill Stationers deck, take the Hindustan Editorials row out of the deliverables table, and change the next steps slide heading to 'Confirming campuses by 15 November'."}],
+      "rubrics": [
+        {"id": "table-row-removed", "type": "TOOL_USE_QUALITY", "text": "The agent's update_deck call sets the deliverables table's rows (slide 8) to the existing rows minus the Hindustan Editorials row, with every other row copied unchanged."},
+        {"id": "heading-changed", "type": "TOOL_USE_QUALITY", "text": "The same update_deck call sets the next steps slide's (slide 10) heading to 'Confirming campuses by 15 November', and changes nothing else."},
+        {"id": "text-reply", "type": "FINAL_RESPONSE_QUALITY", "text": "The reply says the editorials row was removed from the deliverables table and the next steps heading was changed, and gives the deck link."}
+      ]
+    }
+  ]
+}

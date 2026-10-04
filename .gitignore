@@ -7,3 +7,6 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# ADK eval results (evals/README.md); local only.
+.adk/

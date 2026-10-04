@@ -37,7 +37,7 @@ from googleapiclient.http import MediaFileUpload
 from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
-from . import master_deck, visuals, why_ht
+from . import master_deck, research, visuals, why_ht
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -252,7 +252,8 @@ def _save_brief(brief_id: str, **fields) -> None:
 
 
 def build_solution_deck(
-    deck_json: str, client_name: str, brief_id: str, client_website: str = ""
+    deck_json: str, client_name: str, brief_id: str, client_website: str = "",
+    tool_context: ToolContext = None,
 ) -> dict:
     """Render a deck from Deck JSON and publish it as Google Slides.
 
@@ -292,9 +293,12 @@ def build_solution_deck(
     # images it will be resubmitted with anyway. Pictures are never a reason
     # not to publish: if this fails outright, the deck ships with whatever
     # placeholders it has.
+    # A guessed site could hand the cover another company's logo; a
+    # placeholder is better than that.
+    website = client_website if research.url_was_given(client_website, tool_context) else ""
     try:
         pictures = {
-            **visuals.add_cover_logos(deck, client_name, client_website),
+            **visuals.add_cover_logos(deck, client_name, website),
             "images": visuals.fill_images(deck),
         }
     except Exception:  # noqa: BLE001

@@ -1,0 +1,419 @@
+{
+  "_about": "Eval cases for evals/build_evalsets.py. Each is a real brief in sales.agent@'s inbox. ht_reference_deck is the deck HT's team actually sent (kept out of the repo); hidden_past_decks are its Drive file ids in the past-decks folder, hidden from search_past_decks for that case only. Rubrics are case-specific; global ones live in test_config.json. Only briefs HT actually received belong here; demo briefs written for the pilot (Tata Sampann, Akasa Air, Rapido) are deliberately excluded.",
+  "cases": [
+    {
+      "eval_id": "stanley-furniture",
+      "gmail_thread_id": "1a0f67170b4e2f56",
+      "ht_reference_deck": "Stanley Furniture x HT Media Proposal.pdf",
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "stanley-furniture-delhi-only",
+          "text": "The deck limits the plan to Delhi / Delhi NCR editions and audiences and does not propose media in any other city or market."
+        },
+        {
+          "id": "stanley-furniture-duration",
+          "text": "The deck's plan or timeline runs for 3 to 4 weeks (not a longer always-on or multi-month plan)."
+        },
+        {
+          "id": "stanley-furniture-print-large-formats-no-innovations",
+          "text": "The deck's print component uses large standard formats (e.g. full pages, double spreads, large half pages, front-page solus) and does NOT propose jackets, gatefolds, flaps, poster wraps, tabs, booklets or other print innovations."
+        },
+        {
+          "id": "stanley-furniture-print-measurement",
+          "text": "The deck proposes a specific print measurement method other than a brand lift study (BLS) that measures both ad visibility and actions taken by readers (the email suggests a recontact study of HT's subscriber base via Circulation CRM; any specific method that captures visibility and actions such as store visits, enquiries or website visits counts)."
+        },
+        {
+          "id": "stanley-furniture-digital-performance",
+          "text": "The deck's digital component is performance-led: each digital piece is tied to a directly measurable outcome such as clicks, leads, WhatsApp enquiries, catalogue downloads, consultation bookings or store-locator visits, rather than reach or impressions alone."
+        },
+        {
+          "id": "stanley-furniture-show-stoppers",
+          "text": "The deck includes a dedicated HT Show Stoppers proposal that positions Stanley as a partner brand of the property and describes what the integration consists of."
+        },
+        {
+          "id": "stanley-furniture-exclusive-ht",
+          "text": "The deck presents the plan as exclusive to HT Media properties and does not include media on other publishers or networks."
+        },
+        {
+          "id": "stanley-furniture-costing",
+          "text": "The deck or reply handles the request for a plan 'with costs' by stating that costs/commercials will be shared by HT's pricing team, and states no prices, rates or budget figures."
+        },
+        {
+          "id": "stanley-furniture-showroom-bridge",
+          "text": "The deck includes a concrete, trackable mechanism that turns media exposure into Stanley showroom visits or leads (HT used QR codes on print plus an influencer-led showroom meet and greet with VIP invites; unique offer codes, click-to-WhatsApp, appointment booking or similar trackable routes also count)."
+        },
+        {
+          "id": "stanley-furniture-roi-proof-for-owner",
+          "text": "The deck addresses the owner's ROI focus and limited faith in digital explicitly, e.g. by defining success metrics up front, offering to align measurement with Stanley's own method of measuring print efficacy, or committing to a post-campaign results readout."
+        }
+      ]
+    },
+    {
+      "eval_id": "eli-lilly",
+      "gmail_thread_id": "1a0f660ba230f974",
+      "ht_reference_deck": "Lilly X HT Media Partnership Proposal.pdf",
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "eli-lilly-no-drug-promotion",
+          "text": "The deck does not advertise or promote Mounjaro or any other Lilly medicine: no component names the drug in consumer-facing content, explains how it works, or makes treatment claims for it; the communication is disease awareness only."
+        },
+        {
+          "id": "eli-lilly-disease-framing-doctor-cta",
+          "text": "The deck frames obesity as a medical condition (a disease, not a lifestyle or willpower issue) and its consumer-facing messaging directs people to consult a doctor."
+        },
+        {
+          "id": "eli-lilly-world-obesity-day",
+          "text": "The deck includes at least one component built specifically for World Obesity Day on 4 March."
+        },
+        {
+          "id": "eli-lilly-womens-day",
+          "text": "The deck includes at least one component built specifically for Women's Day on 8 March, with an angle that connects women and obesity or metabolic health rather than generic Women's Day branding."
+        },
+        {
+          "id": "eli-lilly-print-and-digital",
+          "text": "The deck proposes both print and digital components and shows how they work together, not a print-only or digital-only plan."
+        },
+        {
+          "id": "eli-lilly-march-phasing",
+          "text": "The deck's timeline places the special-day pieces on or around 4 and 8 March, with any teaser or build-up activity scheduled before those dates."
+        },
+        {
+          "id": "eli-lilly-expert-credibility",
+          "text": "The deck uses credible medical voices to carry the message (HT proposed doctor roundtables, doctor op-eds and a health podcast; any specific doctor- or expert-led format such as endocrinologist columns, expert panels or Q&As counts)."
+        },
+        {
+          "id": "eli-lilly-myth-busting",
+          "text": "The deck includes content that tackles named misconceptions about obesity (for example that it is about willpower or laziness, or that BMI alone defines health) rather than general wellness messaging."
+        },
+        {
+          "id": "eli-lilly-sustained-platform",
+          "text": "The deck gives the campaign an ownable platform or IP that continues beyond the two special days (HT proposed a named multi-phase campaign running into April with native articles, op-eds and explainers; any named platform with content scheduled after 8 March counts)."
+        },
+        {
+          "id": "eli-lilly-audience-participation",
+          "text": "The deck includes at least one mechanism for audience participation or engagement around the cause (HT proposed a daily opinion poll on hindustantimes.com, a social experiment film and a pledge; quizzes, risk self-checks, UGC or similar also count)."
+        }
+      ]
+    },
+    {
+      "eval_id": "rocksport",
+      "gmail_thread_id": "1a0f6620404a2890",
+      "ht_reference_deck": "Rocksport X HT Media Proposal.pdf",
+      "hidden_past_decks": [
+        "1Bu4hpcGlfZ5N3TFCLR6oE_VnkJWYR9fL"
+      ],
+      "rubrics": [
+        {
+          "id": "rocksport-52-week-column-strip",
+          "text": "The deck includes a 52-week adventure and outdoors column in which Rocksport sponsors only a branded strip on the column, not the full column or its editorial content."
+        },
+        {
+          "id": "rocksport-school-testimonials-ht-schools",
+          "text": "The deck includes a brand promotion series built on school testimonials, featuring school principals, placed in HT Schools editions."
+        },
+        {
+          "id": "rocksport-ad-sizing-seasonality",
+          "text": "The deck's print plan uses 120 sq cm brand promotions from March to August, stepping up to 240 and/or 400 sq cm units during the peak season within that window."
+        },
+        {
+          "id": "rocksport-hindi-olympiad",
+          "text": "The deck includes an Olympiad-based opportunity for the Hindi market (e.g. a Hindustan/Live Hindustan school Olympiad association)."
+        },
+        {
+          "id": "rocksport-mint-corporate-ipo",
+          "text": "The deck includes corporate and/or IPO-related opportunities with Mint (e.g. reaching corporate HR/L&D buyers for offsites, Mint events, or IPO-readiness communication)."
+        },
+        {
+          "id": "rocksport-multi-year",
+          "text": "The deck structures the proposal as a multi-year partnership of 3 to 5 years, showing how activity repeats or builds year on year rather than a single-season campaign."
+        },
+        {
+          "id": "rocksport-print-digital-onground",
+          "text": "The deck has components in all three of print, digital and on-ground, including at least one on-ground activation that reaches schools or students directly (HT proposed an interschool adventure challenge through its schools programme and a principals' meet sponsorship; any specific on-ground school activation counts)."
+        },
+        {
+          "id": "rocksport-costing",
+          "text": "The deck or reply acknowledges that the client will evaluate HT partly on pricing and states that commercials will be shared by HT's pricing team, without stating any prices, rates or budget splits."
+        },
+        {
+          "id": "rocksport-audience-tracks",
+          "text": "The deck plans separately for Rocksport's distinct buyer groups, at minimum schools and families/weekend visitors, with corporates as a third (HT split into schools and principals, families and groups, and corporate decision makers; any clear segmentation with matched offerings counts)."
+        },
+        {
+          "id": "rocksport-campsite-offerings",
+          "text": "The deck connects specific components to Rocksport's actual offerings, such as day-out and residential campsites, school adventure programmes or corporate offsites, rather than promoting the brand only in general terms."
+        }
+      ]
+    },
+    {
+      "eval_id": "pentonic",
+      "gmail_thread_id": "1a0f66d65078916a",
+      "ht_reference_deck": "Linc Pen Pentonic X HT Media.pdf",
+      "hidden_past_decks": [
+        "1LGANIhhAaj-gC6t1QtQAIlsDkgs-hkwo"
+      ],
+      "rubrics": [
+        {
+          "id": "pentonic-wall-ugc",
+          "text": "The deck includes the Pentonic Wall Integration as a UGC activation and explains how students create content on the wall and how that content is captured and shared."
+        },
+        {
+          "id": "pentonic-kiosk-roles",
+          "text": "The deck includes a Pentonic branded kiosk for product sales at a special discounted price and states the split of responsibilities: the kiosk set-up arranged by HT (or the partner team), with product sales and on-ground selling handled by Linc's own sales team."
+        },
+        {
+          "id": "pentonic-40-half-page-editorials",
+          "text": "The deck includes 40 half-page editorials in Hindustan (the Hindi daily), keeping both the quantity of 40 and the half-page size."
+        },
+        {
+          "id": "pentonic-separable-line-items",
+          "text": "The deck presents the wall, the kiosk and the 40 editorials as three separate line items, each with its own scope and quantities (e.g. number of campuses, days, units), so each can be costed and evaluated on its own."
+        },
+        {
+          "id": "pentonic-costing",
+          "text": "The deck or reply responds to the request for a detailed cost break-up per integration by stating that the cost break-up will be shared by HT's pricing team, and states no prices, rates or discounts as figures."
+        },
+        {
+          "id": "pentonic-focus-on-selected",
+          "text": "The deck keeps the three integrations the client selected as the core of the proposal; any other ideas are clearly marked as optional add-ons and do not displace the three."
+        },
+        {
+          "id": "pentonic-campus-specifics",
+          "text": "The deck specifies where and when the on-ground pieces run, e.g. named colleges or campus clusters and timing such as fests or term windows (HT's deck listed Delhi NCR campus clusters and major college fests; any specific named locations and timing count)."
+        },
+        {
+          "id": "pentonic-umbrella-idea",
+          "text": "The deck ties the wall, kiosk and editorials together under one campaign idea or hashtag so they read as a single Pentonic campus programme (HT used 'Write Your Story. Ink Your Ambition.' with #PoweredByInk; any single unifying idea counts)."
+        },
+        {
+          "id": "pentonic-ugc-to-digital",
+          "text": "The deck explains how wall content is taken online beyond the campus, e.g. QR upload to a microsite, a campaign hashtag, or reposting the best entries on HT's social handles."
+        },
+        {
+          "id": "pentonic-editorial-content",
+          "text": "The deck says what the 40 half-page editorials will contain and how they connect to the campus activation (for example featuring student entries from the wall, campus coverage or student-focused themes), rather than leaving them as unspecified ad space."
+        }
+      ]
+    },
+    {
+      "eval_id": "lulu-mall",
+      "gmail_thread_id": "1a0fe42ae8405780",
+      "ht_reference_deck": "Lulu Mall  X HT Media.pdf",
+      "hidden_past_decks": [
+        "14H0dMqqorqJB5YjBIKxvZRIZJbS_02eW"
+      ],
+      "rubrics": [
+        {
+          "id": "lulu-mall-phasing",
+          "text": "The deck's plan runs in three stages that match the brief's timing: a pre-launch buzz phase starting end-April or early May, a launch moment in the first week of June, and a sustained phase after the opening."
+        },
+        {
+          "id": "lulu-mall-print-plan",
+          "text": "The deck's print plan includes 2 to 3 pre-launch ads or brand promotions in HT City Delhi (full run) and a 2-page jacket in HT City East Zone and Hindustan, with the jacket placed at or around launch."
+        },
+        {
+          "id": "lulu-mall-social",
+          "text": "The deck includes a social media strategy with concrete post ideas or content themes (for example teaser reels, countdown posts, store walkthroughs), not only a line saying social will amplify the campaign."
+        },
+        {
+          "id": "lulu-mall-native-content",
+          "text": "The deck proposes online articles or native content and names at least one specific article topic or angle for Lulu's launch."
+        },
+        {
+          "id": "lulu-mall-radio",
+          "text": "The deck includes a radio integration with at least one specific mechanic (such as RJ mentions, on-air contests or a live broadcast) and says which campaign phase it runs in."
+        },
+        {
+          "id": "lulu-mall-local-catchment",
+          "text": "The deck targets the Greater Noida / East Delhi shopper catchment around ITHUMS Mall specifically, for example through geo-targeted digital, local influencers or local editions, rather than treating the audience as generic Delhi NCR."
+        },
+        {
+          "id": "lulu-mall-teaser-mechanic",
+          "text": "The deck proposes a curiosity-building pre-launch mechanic that withholds or gradually reveals the news before launch (HT used a 'something big is coming' mystery teaser and guess-the-brand contests; any teaser or reveal mechanic counts)."
+        },
+        {
+          "id": "lulu-mall-launch-footfall",
+          "text": "The deck includes a mechanic aimed at bringing shoppers into the hypermarket on or around opening day, not just announcing it (HT used a live on-ground radio studio at the mall with first-shopper interviews and on-air deal reveals; any footfall-driving activation or offer counts)."
+        },
+        {
+          "id": "lulu-mall-sustain-repeat",
+          "text": "The deck's post-launch phase includes a repeat-visit mechanic such as recurring deals, offers or community engagement, so the campaign does not stop at the launch ad (HT used weekly deals and community initiatives)."
+        }
+      ]
+    },
+    {
+      "eval_id": "krbl-grains-of-hope",
+      "gmail_thread_id": "1a0fe42895f765d3",
+      "ht_reference_deck": "KRBL_GrainsOfHope.pptx.pdf",
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "krbl-grains-of-hope-poshan-prarthna-core",
+          "text": "The deck builds its media plan around the client's Poshan Prarthna nutrition-anthem concept as the central creative, rather than replacing it with a different campaign idea."
+        },
+        {
+          "id": "krbl-grains-of-hope-share-to-meal",
+          "text": "The deck explicitly operationalises the 1 Share = 1 Meal mechanic, explaining what counts as a share and how shares turn into meals."
+        },
+        {
+          "id": "krbl-grains-of-hope-auditable-tracking",
+          "text": "The deck routes every proposed channel (print, digital, on-ground, partnerships) through tagged links or QR codes to a landing page and describes how the shares-to-meals count can be audited or verified."
+        },
+        {
+          "id": "krbl-grains-of-hope-urban-amplifier-tg",
+          "text": "The deck reaches the urban AB 22-50 adult amplifier audience through named HT Media properties suited to them (for example HT, Mint or HT digital surfaces)."
+        },
+        {
+          "id": "krbl-grains-of-hope-grassroots-onground",
+          "text": "The deck includes on-ground activations that reach the beneficiary layer of children, schools and teachers, describing what happens at the school or community level."
+        },
+        {
+          "id": "krbl-grains-of-hope-four-phases",
+          "text": "The deck's plan follows the brief's four phases in order (launch burst for reach and awareness, on-ground proof of impact, partnerships to enable adoption, always-on ritual) and gives each phase at least one concrete activity."
+        },
+        {
+          "id": "krbl-grains-of-hope-partnerships",
+          "text": "The deck's partnerships phase names at least one type of partner that would help schools or families adopt the anthem (for example school networks, education bodies, NGOs or other institutions) and what that partner does."
+        },
+        {
+          "id": "krbl-grains-of-hope-always-on-ritual",
+          "text": "The deck proposes a recurring, always-on mechanic intended to make the anthem a habit (for example a regular slot, a school-assembly routine or a periodic print or digital feature), supporting the move from campaign to ritual."
+        },
+        {
+          "id": "krbl-grains-of-hope-print-launch-format",
+          "text": "The deck uses a high-impact print format at launch that puts the prayer itself on the page and invites readers to act on it through a scan or link (HT used a front-page jacket with a QR into the campaign; any standout print format with a trackable call to action counts)."
+        },
+        {
+          "id": "krbl-grains-of-hope-participation-keepsake",
+          "text": "The deck includes at least one mechanic that keeps the prayer in homes or classrooms beyond the day of publication or invites children and families to contribute content (HT used a colour-the-prayer page uploaded via QR and a plantable seed-paper prayer card; any keepsake or participation mechanic counts)."
+        }
+      ]
+    },
+    {
+      "eval_id": "air-india",
+      "gmail_thread_id": "1a0fe4254461a392",
+      "ht_reference_deck": "Air-india-15th August (1).pptx",
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "air-india-countdown-clock",
+          "text": "The deck proposes a countdown to the sale launch in the HT main daily print edition that changes visibly over multiple days or editions, evaluating or building on the agency's Countdown Clock idea."
+        },
+        {
+          "id": "air-india-markets",
+          "text": "The deck scopes the print execution to the Mumbai and Delhi NCR editions."
+        },
+        {
+          "id": "air-india-engagement-triggers",
+          "text": "The deck includes at least one QR, waitlist or early-access mechanic and says where it leads (for example a registration page or early-access booking flow)."
+        },
+        {
+          "id": "air-india-drop-mechanics",
+          "text": "The deck frames the sale like a ticket or sneaker drop rather than a standard sale ad, using at least one drop-style mechanic such as early-access tiers, limited timed releases, queue or waitlist positions."
+        },
+        {
+          "id": "air-india-in-window-urgency",
+          "text": "The deck includes an element that keeps urgency high during the short sale window itself, such as live or updated limited-fare or seat-availability messaging, not only pre-launch teasing."
+        },
+        {
+          "id": "air-india-independence-day-hook",
+          "text": "The deck ties the campaign to the Independence Day sale period with a contextual creative hook (HT used an Independence Day 'Freedom Times' masthead treatment; any Independence Day themed idea counts)."
+        },
+        {
+          "id": "air-india-front-page-sov",
+          "text": "The deck secures front-page or masthead-level prominence on key days to deliver a disproportionate share of voice (HT proposed masthead integrations on the Hindustan front page; any front-page dominant format counts)."
+        },
+        {
+          "id": "air-india-booking-tracking",
+          "text": "The deck explains how sign-ups or bookings driven by the campaign will be tracked (for example tagged QR codes, unique links or waitlist counts) so booking momentum during the sale window can be measured."
+        },
+        {
+          "id": "air-india-mock-creatives",
+          "text": "The deck includes a mock creative for each recommended innovation, either a generated or attached image or a concrete creative description (headline, layout or what the reader sees and does)."
+        }
+      ]
+    },
+    {
+      "eval_id": "uber",
+      "gmail_thread_id": "1a0fe425e2716db7",
+      "ht_reference_deck": null,
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "uber-microsite",
+          "text": "The deck proposes a One Less Car microsite that is responsive across phone, tablet and laptop, is promoted on HT properties, and splits content between Uber-supplied material and HT-created content."
+        },
+        {
+          "id": "uber-microsite-expiry",
+          "text": "The deck states that the microsite stays live well after the campaign ends, or specifies a hosting or expiry period beyond the campaign."
+        },
+        {
+          "id": "uber-advertorials",
+          "text": "The deck includes print advertorials covering Delhi, Gurgaon and Noida, scheduled after the campaign."
+        },
+        {
+          "id": "uber-disclaimer",
+          "text": "The deck specifies that digital articles carry a 'curated content' or 'spotlight content' style label rather than 'sponsored' or 'advertorial'."
+        },
+        {
+          "id": "uber-influencers",
+          "text": "The deck proposes 2 to 4 influencers split into two roles: credible promoters of a car-less workday, and participants who document their own journey through the experiment."
+        },
+        {
+          "id": "uber-participant-stories",
+          "text": "The deck uses the 25 Delhi car owners as a content engine, describing how their commute journeys will be documented and featured across the deliverables."
+        },
+        {
+          "id": "uber-costing",
+          "text": "The deck or reply addresses the costing request by stating that commercials or costing will be shared by HT's pricing team, without stating any prices."
+        },
+        {
+          "id": "uber-concept-note",
+          "text": "The deck presents a single central concept for the One Less Car programme that ties the microsite, advertorials, articles and influencers together, as the concept note the brief asks for."
+        }
+      ]
+    },
+    {
+      "eval_id": "perfetti-confetti",
+      "gmail_thread_id": "1a0fe42b946b93f2",
+      "ht_reference_deck": null,
+      "hidden_past_decks": [],
+      "rubrics": [
+        {
+          "id": "perfetti-confetti-brand-selection",
+          "text": "The deck covers at least two Perfetti brands whose listed geography overlaps HT Media's markets (such as Delhi/HSM, UP or Maharashtra) and states which brands it focuses on."
+        },
+        {
+          "id": "perfetti-confetti-content-lineup",
+          "text": "The deck proposes content properties (such as shows, series or recurring content formats) for the 2027 content line-up, not only ad placements."
+        },
+        {
+          "id": "perfetti-confetti-no-romance",
+          "text": "For every idea the deck proposes for Alpenliebe, Center Fruit or Happydent, the idea contains no romance or romantic theme."
+        },
+        {
+          "id": "perfetti-confetti-chupa-chups-age",
+          "text": "If the deck covers Chupa Chups, its idea targets teens and young adults without alienating kids (no adult-only or edgy themes); if Chupa Chups is not covered, this is met."
+        },
+        {
+          "id": "perfetti-confetti-tg-interests",
+          "text": "Each brand idea in the deck targets that brand's stated TG and uses its listed interest points (for example Center Fresh: 15-24 with music, cricket or romance; Happydent: mature audience with cooking or light comedy; Center Fruit: kids and 18-25 with kids reality, comedy or music)."
+        },
+        {
+          "id": "perfetti-confetti-brand-comms-fit",
+          "text": "Each brand idea in the deck connects to that brand's stated brand comms or category entry point (for example Alpenliebe conflict moments solved by the product, Happydent post-meal and tension moments, Center Fruit 'laplap' sonic identity or hijack moments, Center Fresh freshness and overthinking)."
+        },
+        {
+          "id": "perfetti-confetti-geo-fit",
+          "text": "Each brand idea runs in markets from that brand's listed geography and uses a fitting HT Media property for those markets (for example Hindustan for Hindi-belt markets, HT for Delhi)."
+        },
+        {
+          "id": "perfetti-confetti-annual-calendar",
+          "text": "The deck lays out the ideas across 2027, showing when each brand's content runs during the year."
+        }
+      ]
+    }
+  ]
+}

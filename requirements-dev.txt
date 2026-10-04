@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest
+# ADK evals (evals/README.md); pinned to the agent's ADK version.
+google-adk[eval]==2.9.2

@@ -39,6 +39,7 @@ from . import classify
 from . import labels
 from . import mail_utils
 from . import notifications
+from . import prompts
 from . import pubsub
 from . import sheet
 from . import storage
@@ -303,13 +304,7 @@ def execute_build(payload: dict) -> str:
         reply = _DRY_RUN_REPLY
     else:
         reply = agent_client.invoke_agent(
-            f"An email thread came in. Subject: {subject}\n\n"
-            f"Full thread so far:\n{thread_context}\n\n"
-            f"The brief_id for this request is {thread_id} — pass it to every "
-            "research tool so the retrieval is recorded against this brief.\n\n"
-            "Research what you need to, then build a solution deck grounded in "
-            "what you actually found. Report the evidence with its sources and "
-            "say plainly what you could not establish.",
+            prompts.brief_request(subject, thread_context, thread_id),
             session_user_id=f"ingestion-{thread_id}",
         )
         if "docs.google.com/presentation" not in reply:

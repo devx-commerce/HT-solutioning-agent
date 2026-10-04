@@ -164,6 +164,11 @@ def _placeholder(ratio: str, caption: str) -> tuple[str, str]:
     )
 
 
+def _caption_of(alt: str) -> str:
+    """A placeholder's description without the prefix _placeholder adds."""
+    return alt.split("): ", 1)[1] if alt.startswith("Image placeholder (") else alt
+
+
 def _is_real_image(value: str) -> bool:
     return value.startswith("data:image/")
 
@@ -177,9 +182,7 @@ def _normalize_image(obj: dict, rule: ImageRule) -> None:
     image = obj.get("image")
     if not isinstance(image, str) or not image.strip() or _is_real_image(image):
         return
-    alt = obj.get("imageAlt") or ""
-    if alt.startswith("Image placeholder ("):
-        alt = alt.split("): ", 1)[-1]
+    alt = _caption_of(obj.get("imageAlt") or "")
     obj["image"], obj["imageAlt"] = _placeholder(rule.ratio, alt)
 
 
@@ -253,6 +256,12 @@ def enforce(deck: dict) -> list[str]:
 
         for name, limit in rule.text.items():
             value = slide.get(name)
+            if name == "imageAlt" and isinstance(value, str):
+                # Measure the description, not the "Image placeholder (16:9): "
+                # prefix this function adds itself; counting it let a deck pass
+                # at build and fail every revision afterwards, naming slides
+                # nobody had touched (found by the refinement evals).
+                value = _caption_of(value)
             if isinstance(value, str) and len(value) > limit:
                 problems.append(
                     f"{where}: {name} is {len(value)} characters; the limit is "

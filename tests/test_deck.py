@@ -287,3 +287,14 @@ def test_decks_are_shared_read_only_with_every_reader_domain(monkeypatch):
         {"type": "domain", "role": "reader", "domain": "hindustantimes.com"},
         {"type": "domain", "role": "reader", "domain": "htdigital.in"},
     ]
+
+
+def test_deploys_never_ship_eval_results_but_keep_the_env_file():
+    """ADK's own .adk/ exclusion is broken (set('.adk/') is single characters)."""
+    pytest.importorskip("click")
+    from google.adk.cli.cli_deploy import _get_ignore_patterns_func
+
+    ignore = _get_ignore_patterns_func("agents/solutioning_agent")
+    ignored = ignore("agents/solutioning_agent", [".adk", ".env", "agent.py", "tools"])
+    assert ".adk" in ignored
+    assert ".env" not in ignored and "agent.py" not in ignored and "tools" not in ignored

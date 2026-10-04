@@ -1014,3 +1014,172 @@ def test_the_agent_model_retries_quota_and_server_errors():
     with patch("agents.solutioning_agent.agent.Client") as client:
         type(root_agent.model).api_client.func(root_agent.model)
     assert client.call_args.kwargs["http_options"].retry_options is retry
+    # A stalled call is cut off and retried rather than left hanging.
+    assert client.call_args.kwargs["http_options"].timeout == 360_000
+
+
+
+def test_an_eval_case_can_hide_hts_own_deck_from_past_deck_search():
+    """Only the hidden deck drops out; the rest of the corpus stays searchable."""
+    answer = _answer(
+        text="Both decks proposed campus activations.",
+        references=[_ref(title="Answer", uri="https://drive/open?id=" + "A" * 33),
+                    _ref(title="Precedent", uri="https://drive/open?id=" + "P" * 33)],
+        citations=[_cite(0, 10, ["0", "1"])],
+    )
+    ctx = MagicMock()
+    ctx.state = {research.EVAL_HIDDEN_DECKS_KEY: ["A" * 33]}
+    with patch.object(research, "PAST_DECKS_ENGINE", "e"), \
+         patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
+         patch.object(research, "_past_deck_file_ids", return_value=frozenset({"A" * 33, "P" * 33})), \
+         patch.object(research, "_log_retrieval"), _fake_discoveryengine(answer=answer):
+        hidden = research.search_past_decks("campus activation", "b", ctx)
+        visible = research.search_past_decks("campus activation", "b")
+
+    assert [d["title"] for d in hidden["results"]] == ["Precedent"]
+    assert sorted(d["title"] for d in visible["results"]) == ["Answer", "Precedent"]
+
+
+def test_the_model_never_sees_the_tool_context_parameter():
+    from google.adk.tools import FunctionTool
+
+    schema = FunctionTool(research.search_past_decks)._get_declaration().parameters_json_schema
+    assert set(schema["properties"]) == {"query", "brief_id"}
+
+
+
+def _scripted_base(*outcomes):
+    """Stand-in for Gemini.generate_content_async yielding/raising per call."""
+    calls = []
+
+    async def fake(self, llm_request, stream=False):
+        outcome = outcomes[len(calls)]
+        calls.append(1)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        for item in outcome:
+            if isinstance(item, BaseException):
+                raise item
+            yield item
+    return fake, calls
+
+
+def _collect(model):
+    import asyncio
+
+    async def go():
+        return [r async for r in model.generate_content_async(object())]
+    return asyncio.run(go())
+
+
+def test_a_timed_out_model_call_is_retried():
+    """google-genai doesn't retry timeouts; one ended a whole eval case."""
+    from google.adk.models import Gemini
+    from agents.solutioning_agent import agent as agent_mod
+
+    fake, calls = _scripted_base(TimeoutError(), ["reply"])
+    with patch.object(Gemini, "generate_content_async", fake), \
+         patch.object(agent_mod.asyncio, "sleep", new=lambda *_: _noop()):
+        assert _collect(agent_mod.root_agent.model) == ["reply"]
+    assert len(calls) == 2
+
+
+def test_timeouts_give_up_after_three_attempts():
+    from google.adk.models import Gemini
+    from agents.solutioning_agent import agent as agent_mod
+
+    fake, calls = _scripted_base(TimeoutError(), TimeoutError(), TimeoutError())
+    with patch.object(Gemini, "generate_content_async", fake), \
+         patch.object(agent_mod.asyncio, "sleep", new=lambda *_: _noop()), \
+         pytest.raises(TimeoutError):
+        _collect(agent_mod.root_agent.model)
+    assert len(calls) == 3
+
+
+def test_a_timeout_after_output_started_is_not_retried():
+    """Retrying then would duplicate what was already received."""
+    from google.adk.models import Gemini
+    from agents.solutioning_agent import agent as agent_mod
+
+    fake, calls = _scripted_base(["partial", TimeoutError()], ["reply"])
+    with patch.object(Gemini, "generate_content_async", fake), pytest.raises(TimeoutError):
+        _collect(agent_mod.root_agent.model)
+    assert len(calls) == 1
+
+
+async def _noop():
+    return None
+
+
+def _conversation(email_text="", tool_results=()):
+    """A tool context whose session holds the email and earlier tool results."""
+    from google.genai import types as gt
+
+    events = [MagicMock(content=gt.Content(role="user", parts=[gt.Part(text=email_text)]))]
+    for result in tool_results:
+        events.append(MagicMock(content=gt.Content(role="user", parts=[
+            gt.Part(function_response=gt.FunctionResponse(name="search_web", response=result))])))
+    ctx = MagicMock()
+    ctx.session.events = events
+    ctx.user_content = gt.Content(role="user", parts=[gt.Part(text=email_text)])
+    return ctx
+
+
+def test_a_guessed_site_is_never_fetched():
+    """Caught in an eval run: the agent fetched uber.com/in/en/ without having it."""
+    ctx = _conversation("Uber is planning a campaign.", [
+        {"findings": [{"claim": "c", "sources": [{"url": "https://www.afaqs.com/uber"}]}]}])
+    with patch.object(research, "_log_retrieval") as log, \
+         patch("urllib.request.urlopen") as urlopen:
+        result = research.fetch_url("https://www.uber.com/in/en/", "b", ctx)
+    urlopen.assert_not_called()
+    assert "search_web first" in result["error"]
+    assert log.call_args.args[2] == "error"
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.lilly.com/",            # named in the email
+    "https://lilly.com/about",           # same site, without www
+    "https://investor.lilly.com/news",   # a subdomain of it
+    "https://www.afaqs.com/news/lilly",  # from a search result
+])
+def test_a_site_from_the_email_or_a_result_is_fetched(url):
+    ctx = _conversation("Please go through their website https://www.lilly.com/ for more.", [
+        {"findings": [{"claim": "c", "sources": [{"url": "https://www.afaqs.com/x"}]}]}])
+    assert research.url_was_given(url, ctx)
+
+
+def test_lookalike_domains_are_not_mistaken_for_a_given_site():
+    ctx = _conversation("See https://lilly.com")
+    assert not research.url_was_given("https://notlilly.com", ctx)
+    assert not research.url_was_given("https://lilly.com.evil.example", ctx)
+
+
+def test_without_a_conversation_there_is_nothing_to_check():
+    assert research.url_was_given("https://anything.example", None)
+
+
+def test_a_guessed_client_website_gets_a_placeholder_logo_not_a_lookup():
+    from agents.solutioning_agent.tools import deck as deck_tools
+    from agents.solutioning_agent.tools import visuals
+    from tests.test_visuals import _spine_deck
+
+    ctx = _conversation("Rapido wants a campaign.")
+    with patch.object(visuals, "client_logo") as client_logo, \
+         patch.object(deck_tools, "_render_pptx", return_value=b"PPTX"), \
+         patch.object(deck_tools, "_upload_pptx", return_value={"id": "f", "webViewLink": "L"}), \
+         patch.object(deck_tools, "_save_brief"):
+        result = deck_tools.build_solution_deck(
+            json.dumps(_spine_deck()), "Rapido", "b", "https://rapido.bike", ctx)
+    client_logo.assert_not_called()
+    assert result["client_logo"] is False
+
+
+def test_the_model_never_sees_the_new_context_parameters():
+    from google.adk.tools import FunctionTool
+    from agents.solutioning_agent.tools import deck as deck_tools
+
+    fetch = FunctionTool(research.fetch_url)._get_declaration().parameters_json_schema
+    build = FunctionTool(deck_tools.build_solution_deck)._get_declaration().parameters_json_schema
+    assert set(fetch["properties"]) == {"url", "brief_id"}
+    assert set(build["properties"]) == {"deck_json", "client_name", "brief_id", "client_website"}

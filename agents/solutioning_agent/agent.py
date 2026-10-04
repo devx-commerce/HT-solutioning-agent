@@ -8,6 +8,8 @@ not two different behaviours.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from functools import cached_property
 from pathlib import Path
@@ -55,9 +57,42 @@ class _RegionalGemini(Gemini):
             ),
             # Overriding api_client bypasses ADK's own client construction,
             # which is where retry_options would otherwise be applied.
-            http_options=types.HttpOptions(retry_options=self.retry_options),
+            http_options=types.HttpOptions(
+                retry_options=self.retry_options, timeout=_MODEL_TIMEOUT_MS
+            ),
         )
 
+    async def generate_content_async(self, llm_request, stream: bool = False):
+        """Retries a call cut off by the timeout; the client's own retry doesn't.
+
+        google-genai retries HTTP error codes and dropped connections, not a
+        timeout, so without this a single slow call ended a whole brief with
+        no deck (lulu-mall, 2026-10-03 eval run). Only retried when nothing
+        was received yet, so a response is never duplicated.
+        """
+        for attempt in range(1, _TIMEOUT_ATTEMPTS + 1):
+            received = False
+            try:
+                async for response in super().generate_content_async(llm_request, stream):
+                    received = True
+                    yield response
+                return
+            except TimeoutError:
+                if received or attempt == _TIMEOUT_ATTEMPTS:
+                    raise
+                logging.getLogger("solutioning_agent").warning(
+                    "model call timed out, retrying (attempt %d of %d)",
+                    attempt + 1, _TIMEOUT_ATTEMPTS,
+                )
+                await asyncio.sleep(2 * attempt)
+
+
+# Without a timeout a stalled connection hung one call for 8 minutes before
+# the server reset it (2026-10-03 eval run). Writing a whole deck usually
+# takes 1 to 2 minutes but has taken over 4, so the limit is 6; a call cut
+# off here is retried by generate_content_async above.
+_MODEL_TIMEOUT_MS = 360_000
+_TIMEOUT_ATTEMPTS = 3
 
 # A deck run is a dozen or more model calls over several minutes; without a
 # retry, one 429 (seen 2026-10-01 with two runs in parallel) fails the whole
@@ -247,11 +282,19 @@ every item, and some need things not listed. Use your judgement.
 Be specific even where the brief is silent. A sensible assumption stated
 plainly is far more useful than a vague line. Write estimates the way HT's
 own decks do: ranges ("40 to 60 outlets per town"), "~" and "+", "indicative
-markets, final list subject to permissions". Mark anything you assumed
-rather than found as indicative, and never present an assumption as a
-researched fact or attach a source to it. Choose cities from the brief's
+markets, final list subject to permissions". Choose cities from the brief's
 geography, or from where HT's own properties run when the brief names a
 region but no cities.
+
+Every figure you assumed rather than found carries the word "indicative"
+next to it, on every slide, not only the custom-solution ones: "40 to 60
+outlets per town (indicative)", "12 metro exits (indicative)", "6 radio
+spots a day (indicative)". In a table, say it once in the column header:
+"Scale (indicative)". This covers counts, frequencies, durations, reach and
+audience sizes. Never attach a source to an assumption. Before you call
+build_solution_deck, go through every number in the deck: each one either
+came from the brief, a tool result or HT's fixed credentials, or it is
+marked indicative.
 
 For example, a mystery shopper programme says which towns and how many
 outlets in each, how often shoppers visit, what the shopper asks for and

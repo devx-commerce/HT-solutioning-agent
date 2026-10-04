@@ -376,3 +376,21 @@ def test_a_revision_of_a_deck_with_no_images_is_still_allowed():
          patch.object(deck_tools, "_save_brief"):
         result = deck_tools.update_deck("b1", json.dumps([{"slide_index": 2, "field": "quote", "value": "New."}]))
     assert result.get("edits_applied") == ["slide 2: quote"]
+
+
+
+def test_a_placeholder_caption_at_the_limit_still_passes_on_every_later_check():
+    """The prefix enforce adds must not count: a deck that passed at build must
+    pass on revision too, or every edit fails naming slides nobody touched."""
+    deck = _deck()
+    caption = "x" * 140   # exactly two-column's imageAlt limit
+    deck["slides"][6]["imageAlt"] = caption
+    assert master_deck.enforce(deck) == []
+    assert deck["slides"][6]["imageAlt"].startswith("Image placeholder (12:13): ")
+    assert master_deck.enforce(json.loads(json.dumps(deck))) == []
+
+
+def test_a_caption_over_the_limit_is_still_rejected():
+    deck = _deck()
+    deck["slides"][6]["imageAlt"] = "x" * 141
+    assert any("imageAlt is 141 characters" in p for p in master_deck.enforce(deck))

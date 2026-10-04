@@ -1,0 +1,6 @@
+# Read by `adk deploy agent_engine` (cli_deploy._get_ignore_patterns_func).
+# Its own default meant to exclude .adk/ is broken in ADK 2.9.2: set(".adk/")
+# is a set of single characters. Eval results land in .adk/ and hold client
+# emails, so they must never ship. Do not list .env: the agent needs it.
+.adk
+__pycache__

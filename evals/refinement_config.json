@@ -1,0 +1,36 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 1.0,
+      "judge_model_options": {
+        "judge_model": "gemini-2.5-pro",
+        "num_samples": 3
+      },
+      "rubrics": [
+        {
+          "rubric_id": "r-no-false-claims",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "The reply claims no change the tool results don't show was made. If the request ended without a successful edit (the last relevant tool call returned an error or a rejection), the reply says plainly that the deck was not changed. An earlier rejected attempt that a later call fixed need not be mentioned."
+          }
+        }
+      ]
+    },
+    "rubric_based_tool_use_quality_v1": {
+      "threshold": 1.0,
+      "judge_model_options": {
+        "judge_model": "gemini-2.5-pro",
+        "num_samples": 3
+      },
+      "rubrics": [
+        {
+          "rubric_id": "r-no-trial-edits",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "The agent never sent an exploratory, empty or test update_deck call to see what would happen, and never called build_solution_deck to change a deck that already existed. A genuine edit that the deck rules rejected, followed by a corrected call, is not a trial edit."
+          }
+        }
+      ]
+    }
+  }
+}
