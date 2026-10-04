@@ -113,7 +113,24 @@ def _id_token_headers() -> dict:
     import google.auth.transport.requests
     from google.oauth2 import id_token
 
-    token = id_token.fetch_id_token(google.auth.transport.requests.Request(), RENDER_URL)
+    request = google.auth.transport.requests.Request()
+    try:
+        token = id_token.fetch_id_token(request, RENDER_URL)
+    except Exception:  # noqa: BLE001 - fall back below
+        # Cloud Build's metadata server gives identity tokens only to a
+        # dedicated build service account, so the evals after a deploy mint
+        # one for the same account through the IAM Credentials API instead.
+        import google.auth
+        from google.auth import impersonated_credentials
+
+        source, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        source.refresh(request)
+        signer = impersonated_credentials.Credentials(
+            source_credentials=source, target_principal=source.service_account_email,
+            target_scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds = impersonated_credentials.IDTokenCredentials(signer, target_audience=RENDER_URL, include_email=True)
+        creds.refresh(request)
+        token = creds.token
     return {"Authorization": f"Bearer {token}"}
 
 
