@@ -1,0 +1,24 @@
+# Changes move dev -> uat -> prod. A pull request into prod must come from
+# uat, and one into uat must come from dev; anything may merge into dev.
+# Required on prod and uat by their branch protection (repository admins can
+# still merge directly).
+name: branch-flow
+on:
+  pull_request:
+    branches: [prod, uat]
+jobs:
+  branch-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the source branch
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" = "prod" ] && [ "$HEAD" != "uat" ]; then
+            echo "Only uat can merge into prod (this pull request is from $HEAD)."; exit 1
+          fi
+          if [ "$BASE" = "uat" ] && [ "$HEAD" != "dev" ]; then
+            echo "Only dev can merge into uat (this pull request is from $HEAD)."; exit 1
+          fi
+          echo "$HEAD -> $BASE is allowed."
