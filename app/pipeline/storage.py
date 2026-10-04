@@ -125,7 +125,7 @@ def thread_status(thread_id: str) -> dict | None:
     return dict(rows[0]) if rows else None
 
 
-def open_thread(thread_id: str, triggered_by: str) -> None:
+def open_thread(thread_id: str, triggered_by: str, received_at: datetime | None = None) -> None:
     # MERGE, not a plain INSERT — this also re-opens a thread that already
     # has a row (a manual generate-deck override on an already-built
     # thread, or a fresh message retrying one marked failed), resetting it
@@ -149,16 +149,21 @@ def open_thread(thread_id: str, triggered_by: str) -> None:
           triggered_by = @triggered_by,
           sheet_row_written = FALSE,
           brief_id = NULL,
+          received_at = @received_at,
           updated_at = @now
         WHEN NOT MATCHED THEN
-          INSERT (thread_id, status, triggered_by, sheet_row_written, brief_id, created_at, updated_at)
-          VALUES (@thread_id, 'building', @triggered_by, FALSE, NULL, @now, @now)
+          INSERT (thread_id, status, triggered_by, sheet_row_written, brief_id, received_at, created_at, updated_at)
+          VALUES (@thread_id, 'building', @triggered_by, FALSE, NULL, @received_at, @now, @now)
         """,
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("thread_id", "STRING", thread_id),
                 bigquery.ScalarQueryParameter("triggered_by", "STRING", triggered_by),
                 bigquery.ScalarQueryParameter("now", "TIMESTAMP", now),
+                # When the email arrived, for the SOW's time-to-first-draft
+                # metric (received to built), not just when a sweep saw it.
+                bigquery.ScalarQueryParameter(
+                    "received_at", "TIMESTAMP", received_at.isoformat() if received_at else None),
             ]
         ),
     ).result()

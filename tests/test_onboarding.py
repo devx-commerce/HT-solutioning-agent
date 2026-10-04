@@ -25,17 +25,17 @@ def _callback(hd: str | None, domains: set[str]):
         return gmail_oauth.handle_callback("code", "state"), store
 
 
-HT = {"hindustantimes.com", "htdigital.in", "livehindustan.com"}
+HT = {"hindustantimes.com", "htdigital.in"}
 
 
-@pytest.mark.parametrize("hd", ["hindustantimes.com", "htdigital.in", "LiveHindustan.com"])
+@pytest.mark.parametrize("hd", ["hindustantimes.com", "htdigital.in", "HTDigital.in"])
 def test_every_ht_domain_can_connect(hd):
     result, store = _callback(hd, HT)
     assert result["email"].endswith(hd)
     store.assert_called_once()
 
 
-@pytest.mark.parametrize("hd", ["gmail.com", None, "hindustantimes.com.evil.example"])
+@pytest.mark.parametrize("hd", ["gmail.com", None, "livehindustan.com", "hindustantimes.com.evil.example"])
 def test_other_accounts_are_refused_with_the_allowed_domains_named(hd):
     with pytest.raises(ValueError, match="@htdigital.in"):
         _callback(hd, HT)

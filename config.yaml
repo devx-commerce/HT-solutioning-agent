@@ -1,0 +1,107 @@
+# Solutioning Agent configuration
+#
+# This is the one place to change how the agent behaves. Every value has a
+# working default. After editing, deploy (see docs/operations/deploy.md); the
+# deploy checks this file first and stops with a plain explanation if
+# something is wrong, before anything is changed.
+#
+# Secrets (tokens, keys) never go in this file. They live in Secret Manager.
+
+# ---------------------------------------------------------------------------
+# Settings: safe to change
+# ---------------------------------------------------------------------------
+settings:
+
+  # Who receives the weekly eval summary. (Each "Solution deck drafted" email
+  # goes to the inbox the brief arrived in.)
+  eval_summary_email: sales.agent@hindustantimes.com
+
+  # Which Google Workspace domains may connect an inbox on the onboarding page.
+  onboarding_domains:
+    - hindustantimes.com
+    - htdigital.in
+
+  # Which domains can open (read only) the decks the agent creates.
+  deck_reader_domains:
+    - hindustantimes.com
+    - htdigital.in
+
+  # Senders whose mail is never treated as a brief, so it is skipped before
+  # any processing. Use full email addresses.
+  excluded_senders:
+    - hrtimes@hindustantimes.com
+    - ithelpdesk@hindustantimes.com
+    - noreply@darwinbox.in
+    - digests@darwinbox.in
+    - payroll@hindustantimes.com
+    - trending@hindustantimes.com
+    - itcommunication@hindustantimes.com
+
+  # Publications the agent never cites or names. Research results that rest
+  # only on these sites are dropped. A domain also covers its subdomains.
+  competitor_outlets:
+    The Times of India / Times Group: [indiatimes.com, timesofindia.com, economictimes.com, maharashtratimes.com]
+    Dainik Jagran: [jagran.com]
+    Dainik Bhaskar: [bhaskar.com, divyabhaskar.co.in]
+    Amar Ujala: [amarujala.com]
+    The Indian Express: [indianexpress.com]
+    The Hindu: [thehindu.com]
+    The Tribune: [tribuneindia.com]
+
+  # How often inboxes are checked for new briefs (cron, India time).
+  # Deploying never pauses or resumes the check; see docs/operations.
+  sweep_schedule: "*/30 * * * *"
+
+  # Deck rules.
+  max_slides: 20   # longest deck the agent may build (7 to 30)
+  min_images: 3    # pictures a new deck must have (0 to 10)
+
+  # Models. Change only to a model enabled in this project.
+  models:
+    agent: gemini-3.8-flash          # research plan, drafting, revisions
+    research: gemini-3.8-flash       # web research with Google Search
+    classify: gemini-2.5-flash-lite  # "is this email a brief?"
+    images: gemini-2.5-flash-image   # slide pictures
+
+  # Google Drive folders and the briefs sheet, by id (from their URLs).
+  deck_folder_id: 1ethtG7qzfsL1QOsutGRqr9MaeN9vpzIF        # "Agent Generated Decks"
+  past_decks_folder_ids: [1P2dOh60waUoIHgeaoaGE1zYqAiBzM9F_]  # "Past Pitch Decks"
+  ht_assets_folder_id: 1SMqLJ-lHAYSDMb2lvZ-kMPJIOS6TbLBN   # holds the HT logo
+  briefs_sheet_id: 1q-U5t4d_F0KmWuKJcsccCmgAiqPgs1pUhbo9HIAcbzI
+
+  # Evals: the short run after every deploy, and the full weekly run.
+  evals:
+    after_deploy: smoke              # smoke (about 15 min), full (about 1 hour) or none
+    smoke_cases: [pentonic, eli-lilly]
+    weekly_schedule: "0 2 * * 0"     # Sundays 02:00 India time; full set, 3 runs
+
+# ---------------------------------------------------------------------------
+# Infrastructure: change only when moving to another project
+# ---------------------------------------------------------------------------
+infrastructure:
+  project_id: academic-diode-477405-m3
+  # The agent's own Google account: owns the decks, sends the "deck drafted"
+  # emails, and is never read as a brief. Its token is secrets.agent_token.
+  agent_email: sales.agent@hindustantimes.com
+  project_number: "296974829876"
+  region: us-central1        # Cloud Run, Agent Engine, Pub/Sub, Scheduler
+  model_location: global     # where the Gemini 3.x models are served
+  image_location: global
+  bigquery_dataset: solutioning_agent
+  eval_dataset: solutioning_agent_eval
+  eval_deck_folder_id: 11THzL-7Z1Cw4PdlFY6Ct4VtMR74amTZd
+  eval_results_bucket: academic-diode-477405-m3-solutioning-agent-evals
+  agent_engine_id: "1985844993356464128"   # updated in place on every deploy
+  past_decks_engine: ht-sales-pitch-agent_1789729673554
+  past_decks_location: us
+  services:
+    pipeline: solutioning-agent
+    onboarding: solutioning-agent-onboarding
+    renderer: solutioning-agent-renderer
+  pubsub_topic: solutioning-agent-build-work
+  scheduler_job: solutioning-agent-sweep
+  secrets:
+    agent_token: solutioning-agent-oauth          # sales.agent@ refresh token
+    oauth_client: solutioning-agent-oauth-client  # onboarding OAuth client
+    state_key: solutioning-agent-state-key        # signs onboarding links
+    youtube_key: solutioning-agent-youtube-key

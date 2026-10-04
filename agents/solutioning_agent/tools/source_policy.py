@@ -6,18 +6,20 @@ to a rival's site, so web findings resting on these domains are dropped in
 before the agent sees it. The agent's instruction names the same outlets,
 generated from `OUTLETS`, so it doesn't name them in prose either.
 
-The list is an assumption agreed for the pilot, not one HT has confirmed;
-developer-docs/open-items.md tracks it for review. Change it here and nowhere else.
+The list is set in config.yaml (settings.competitor_outlets); the default
+below is the one agreed for the pilot.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import urllib.parse
 
 # Outlet -> the domains it publishes on. A domain also covers its subdomains,
 # so "indiatimes.com" catches timesofindia., economictimes., brandequity.
 # economictimes. and navbharattimes.indiatimes.com.
-OUTLETS: dict[str, tuple[str, ...]] = {
+_DEFAULT_OUTLETS: dict[str, tuple[str, ...]] = {
     "The Times of India / Times Group": (
         "indiatimes.com", "timesofindia.com", "economictimes.com",
         "maharashtratimes.com",
@@ -30,7 +32,12 @@ OUTLETS: dict[str, tuple[str, ...]] = {
     "The Tribune": ("tribuneindia.com",),
 }
 
-_BLOCKED = frozenset(d for domains in OUTLETS.values() for d in domains)
+OUTLETS: dict[str, tuple[str, ...]] = (
+    {k: tuple(v) for k, v in json.loads(os.environ["COMPETITOR_OUTLETS"]).items()}
+    if os.environ.get("COMPETITOR_OUTLETS") else _DEFAULT_OUTLETS
+)
+
+_BLOCKED = frozenset(d.lower() for domains in OUTLETS.values() for d in domains)
 
 
 def is_blocked(url: str) -> bool:

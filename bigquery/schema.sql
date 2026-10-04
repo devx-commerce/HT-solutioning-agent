@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.ingestion_threads` (
   triggered_by STRING,    -- 'branch_a' | 'branch_b'
   sheet_row_written BOOL,
   brief_id STRING,
+  received_at TIMESTAMP,  -- when the email arrived; time to first draft = built updated_at - this
   created_at TIMESTAMP,
   updated_at TIMESTAMP
 );

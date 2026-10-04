@@ -15,6 +15,7 @@ reads and the rules enforced here cannot drift apart.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 THEME = "ht-media"
@@ -29,11 +30,12 @@ PLACEHOLDER_PREFIX = "placeholder://"
 DEFAULT_CAPTION = "image to be added"
 
 MIN_SLIDES = 7
-MAX_SLIDES = 20
+# Set from config.yaml (settings.max_slides, settings.min_images).
+MAX_SLIDES = int(os.environ.get("MAX_SLIDES", "20"))
 # A first draft needs at least this many pictures (generated at build time).
 # Checked only when a deck is built, never on a revision, so decks built
 # before the rule existed stay editable.
-MIN_IMAGES = 3
+MIN_IMAGES = int(os.environ.get("MIN_IMAGES", "3"))
 
 
 @dataclass(frozen=True)

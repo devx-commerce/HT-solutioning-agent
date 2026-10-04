@@ -23,7 +23,6 @@ EVIDENCE = """### Research findings
 
 @pytest.fixture
 def sent(monkeypatch):
-    monkeypatch.setenv("SOLUTIONING_NOTIFY_EMAIL", "solutioning@example.com")
     captured = {}
     gmail = MagicMock()
     gmail.users.return_value.messages.return_value.send.side_effect = (
@@ -32,7 +31,7 @@ def sent(monkeypatch):
     with patch.object(notifications, "build", return_value=gmail), \
          patch.object(notifications, "get_credentials", return_value=None):
         notifications.send_deck_notification(
-            "Tata Sampann", "Launch ₹10 sachets in UP and Bihar.",
+            "am@hindustantimes.com", "Tata Sampann", "Launch ₹10 sachets in UP and Bihar.",
             deck_link="https://docs.google.com/presentation/d/abc/edit",
             evidence=EVIDENCE,
             gaps=["District priorities"],
@@ -155,7 +154,6 @@ def test_the_same_destination_matches_across_link_formats(cited, returned):
 
 
 def test_removed_claims_are_reported_as_a_gap_and_the_deck_link_survives(monkeypatch):
-    monkeypatch.setenv("SOLUTIONING_NOTIFY_EMAIL", "solutioning@example.com")
     captured = {}
     gmail = MagicMock()
     gmail.users.return_value.messages.return_value.send.side_effect = (
@@ -165,7 +163,7 @@ def test_removed_claims_are_reported_as_a_gap_and_the_deck_link_survives(monkeyp
     with patch.object(notifications, "build", return_value=gmail), \
          patch.object(notifications, "get_credentials", return_value=None):
         notifications.send_deck_notification(
-            "Rapido", "Metro se ghar tak.", deck_link=deck,
+            "am@hindustantimes.com", "Rapido", "Metro se ghar tak.", deck_link=deck,
             evidence=f"Deck: {deck}\n- Invented ([x](https://made.up/a)).",
             gaps=[], allowed_urls=set(),
         )
@@ -173,3 +171,13 @@ def test_removed_claims_are_reported_as_a_gap_and_the_deck_link_survives(monkeyp
     assert "made.up" not in text
     assert f"Deck: {deck}" in text
     assert "1 claim removed because it cited a link no research tool returned" in text
+
+
+
+def test_the_notification_goes_to_the_inbox_the_brief_came_from(sent):
+    assert sent["to"] == "am@hindustantimes.com"
+
+
+def test_no_recipient_is_an_error_not_a_silent_drop():
+    with pytest.raises(RuntimeError, match="No recipient"):
+        notifications.send_deck_notification("", "Acme", "brief")

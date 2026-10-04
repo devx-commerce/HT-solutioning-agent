@@ -56,7 +56,7 @@ _DRY_RUN_REPLY = "[dry-run] https://docs.google.com/presentation/d/DRY-RUN-NO-DE
 # against the real inbox 2026-09-25); this saves the model call and keeps
 # them out of the decision log. Branch B is not filtered: a person applying
 # the generate-deck label by hand is an explicit override.
-EXCLUDED_SENDERS = (
+_DEFAULT_EXCLUDED_SENDERS = (
     "hrtimes@hindustantimes.com",
     "ithelpdesk@hindustantimes.com",
     "noreply@darwinbox.in",
@@ -64,6 +64,11 @@ EXCLUDED_SENDERS = (
     "payroll@hindustantimes.com",
     "trending@hindustantimes.com",
     "itcommunication@hindustantimes.com",
+)
+# Set from config.yaml (settings.excluded_senders) at deploy time.
+EXCLUDED_SENDERS = tuple(
+    a.strip() for a in os.environ.get("EXCLUDED_SENDERS", ",".join(_DEFAULT_EXCLUDED_SENDERS)).split(",")
+    if a.strip()
 )
 
 
@@ -74,13 +79,13 @@ def _sender_filter() -> str:
 def _self_filter() -> str:
     """Exclude the agent's own mail from its own sweep.
 
-    The deck-built notification goes to SOLUTIONING_NOTIFY_EMAIL, currently
-    the same mailbox this sweeps, so without this the agent reads its own
+    The "deck drafted" notification is sent from AGENT_EMAIL into the very
+    inbox the brief came from, so without this the agent reads its own
     notifications back as new requests. Confirmed live: one such
     notification classified as a solution request at confidence 1.00.
     """
-    notify = os.environ.get("SOLUTIONING_NOTIFY_EMAIL", "").strip()
-    return "-from:me" + (f" -from:{notify}" if notify else "")
+    agent = os.environ.get("AGENT_EMAIL", "").strip()
+    return "-from:me" + (f" -from:{agent}" if agent else "")
 
 
 def run_sweep_for_user(
@@ -97,13 +102,13 @@ def run_sweep_for_user(
 
     for message_id in branch_a_ids:
         outcome = _process_branch_a(
-            gmail, gmail_secret, message_id, force=force, dry_run=dry_run
+            gmail, gmail_secret, message_id, force=force, dry_run=dry_run, mailbox=email
         )
         queued, rejected, skipped = _tally(outcome, queued, rejected, skipped)
 
     for message_id in branch_b_ids:
         outcome = _process_branch_b(
-            gmail, gmail_secret, message_id, force=force, dry_run=dry_run
+            gmail, gmail_secret, message_id, force=force, dry_run=dry_run, mailbox=email
         )
         queued, rejected, skipped = _tally(outcome, queued, rejected, skipped)
 
@@ -165,7 +170,7 @@ def _thread_lock_reason(existing_thread: dict | None, triggered_by: str) -> str 
 
 
 def _process_branch_a(
-    gmail, gmail_secret: str, message_id: str, *, force: bool, dry_run: bool
+    gmail, gmail_secret: str, message_id: str, *, force: bool, dry_run: bool, mailbox: str = ""
 ) -> str:
     if not force and storage.decision_exists(message_id):
         return "skipped"
@@ -200,13 +205,13 @@ def _process_branch_a(
         gmail_secret, msg, thread_context,
         client_name=result.client_name, brief=result.brief,
         touchpoints=result.touchpoints, category=result.category,
-        triggered_by="branch_a", dry_run=dry_run,
+        triggered_by="branch_a", dry_run=dry_run, mailbox=mailbox,
     )
     return "queued"
 
 
 def _process_branch_b(
-    gmail, gmail_secret: str, message_id: str, *, force: bool, dry_run: bool
+    gmail, gmail_secret: str, message_id: str, *, force: bool, dry_run: bool, mailbox: str = ""
 ) -> str:
     if not force and storage.decision_exists(message_id):
         return "skipped"
@@ -239,7 +244,7 @@ def _process_branch_b(
         gmail_secret, msg, thread_context,
         client_name=result.client_name, brief=result.brief,
         touchpoints=result.touchpoints, category=result.category,
-        triggered_by="branch_b", dry_run=dry_run,
+        triggered_by="branch_b", dry_run=dry_run, mailbox=mailbox,
     )
     return "queued"
 
@@ -247,8 +252,9 @@ def _process_branch_b(
 def _enqueue(
     gmail_secret: str, msg: mail_utils.ParsedMessage, thread_context: str,
     client_name, brief, touchpoints, category, triggered_by: str, dry_run: bool,
+    mailbox: str = "",
 ) -> None:
-    storage.open_thread(msg.thread_id, triggered_by)
+    storage.open_thread(msg.thread_id, triggered_by, received_at=msg.received_at)
     pubsub.publish_build_task(
         gmail_secret=gmail_secret,
         message_id=msg.message_id,
@@ -264,6 +270,8 @@ def _enqueue(
         category=category,
         triggered_by=triggered_by,
         dry_run=dry_run,
+        # Whose inbox the brief came from: the "deck drafted" email goes there.
+        mailbox=mailbox,
     )
 
 
@@ -317,6 +325,8 @@ def execute_build(payload: dict) -> str:
 
     labels.apply_label(gmail, message_id, labels.DECK_GENERATED_LABEL)
     notifications.send_deck_notification(
+        # Builds queued before this field existed fall back to the agent's own inbox.
+        payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
         payload["client_name"],
         payload["brief"],
         deck_link=_deck_link(reply),

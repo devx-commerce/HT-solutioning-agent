@@ -51,8 +51,8 @@ GMAIL_SCOPES = [
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
-# Comma-separated: HT's people are on hindustantimes.com, htdigital.in and
-# livehindustan.com. Empty allows any verified Google account.
+# Comma-separated: HT's people are on hindustantimes.com and htdigital.in.
+# Empty allows any verified Google account.
 ALLOWED_DOMAINS = {
     d.strip().lower() for d in os.environ.get("ALLOWED_ONBOARD_DOMAIN", "").split(",") if d.strip()
 }

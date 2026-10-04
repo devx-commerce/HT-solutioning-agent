@@ -3,9 +3,8 @@
 Two things live here, both sent from the one shared system identity, never
 from an onboarded mailbox: a reauth prompt (the part re-onboarding itself
 was missing), and the deck-built notification. Neither is a reply on a
-client thread — this build's scope is solutioning's own inbox, and the
-notification goes back to solutioning, not out to whoever the triggering
-email came from. That's what makes `send` (not just `draft`) safe here:
+client thread: the notification goes to the HT inbox the brief arrived in,
+never out to whoever sent the triggering email. That's what makes `send` (not just `draft`) safe here:
 nothing in this module ever addresses an external recipient.
 """
 
@@ -88,6 +87,7 @@ def _search_count(r: dict) -> str:
 
 
 def send_deck_notification(
+    to: str,
     client_name: str | None,
     brief: str | None,
     deck_link: str | None = None,
@@ -96,15 +96,14 @@ def send_deck_notification(
     retrievals: list[dict] | None = None,
     allowed_urls: set[str] | None = None,
 ) -> None:
-    """One new email to solutioning's own notify address — never a reply
-    on the triggering thread, which may have external participants.
+    """One new email to the inbox the brief came from: never a reply on the
+    triggering thread, which may have external participants.
 
     Carries the four things the SOW asks for in a single message: the
     brief, an evidence summary, the gaps, and the draft.
     """
-    to = os.environ.get("SOLUTIONING_NOTIFY_EMAIL", "")
     if not to:
-        raise RuntimeError("SOLUTIONING_NOTIFY_EMAIL is not set, so there is nowhere to send this.")
+        raise RuntimeError("No recipient for the deck notification, so there is nowhere to send it.")
     if gaps is None and evidence:
         # The agent lists its gaps inside its reply; lift them into their own
         # section rather than leaving it empty while the evidence repeats them.
