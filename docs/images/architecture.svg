@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 1190" width="1420" height="1190" role="img" aria-label="Architecture of the HT solutioning agent. Account managers connect their inboxes through the onboarding page. Every 30 minutes a scheduler calls the sweep on Cloud Run, which reads each inbox, filters noise, deduplicates, classifies requests and queues builds on Pub/Sub. Each queued build calls the Solutioning Agent on Vertex AI Agent Engine, then labels the email, sends a notification and adds a row to the briefs sheet. Gemini Enterprise chat calls the same agent. The agent researches with HT's past decks, Google Search, YouTube and web pages, then builds a deck: rules, logos and generated images, rendering on a Cloud Run renderer, and upload to Google Drive as read-only Slides, with the deck saved in BigQuery for later revisions.">
+        <style>
+  .band{fill:#eef2f4} .bt{font:600 12px Helvetica,Arial,sans-serif;letter-spacing:.06em;fill:#0e6e8c}
+  .bx{fill:#ffffff;stroke:#17212b;stroke-width:1.2} .t{font:600 12.5px Helvetica,Arial,sans-serif;fill:#17212b}
+  .m{font:400 10.5px Menlo,Consolas,monospace;fill:#17212b} .s{font:400 11px Helvetica,Arial,sans-serif;fill:#5a6672}
+  .ar{fill:none;stroke:#8d9aa6;stroke-width:1.3} .al{font:400 10.5px Helvetica,Arial,sans-serif;fill:#5a6672} .ahp{fill:#8d9aa6}
+</style>
+<rect x="0" y="0" width="1420" height="1190" fill="#f7f9fa"/>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahp" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- Band A: people and ways in -->
+        <rect class="band" x="4" y="6" width="1412" height="160" rx="6"/>
+        <text class="bt" x="20" y="28">WHO USES IT AND HOW</text>
+        <rect class="bx" x="20" y="44" width="290" height="100" rx="4"/>
+        <text class="t" x="32" y="64">Account managers' Gmail inboxes</text>
+        <text class="s" x="32" y="81">Client briefs arrive here as normal email.</text>
+        <text class="s" x="32" y="97">Label an email <tspan class="m">generate-deck</tspan> to force a build.</text>
+        <text class="s" x="32" y="113">Built requests get the label</text>
+        <text class="m" x="32" y="129">deck-generated</text>
+        <rect class="bx" x="340" y="44" width="300" height="100" rx="4"/>
+        <text class="t" x="352" y="64">Inbox onboarding page</text>
+        <text class="m" x="352" y="81">Cloud Run · solutioning-agent-onboarding</text>
+        <text class="m" x="352" y="97">/oauth/gmail/start → token in Secret Manager</text>
+        <text class="s" x="352" y="115">For hindustantimes.com and htdigital.in</text>
+        <text class="s" x="352" y="131">accounts</text>
+        <rect class="bx" x="670" y="44" width="300" height="100" rx="4"/>
+        <text class="t" x="682" y="64">"Solution deck drafted" email</text>
+        <text class="s" x="682" y="81">Sent by sales.agent@ to the inbox</text>
+        <text class="s" x="682" y="97">the brief came from</text>
+        <text class="s" x="682" y="113">Deck link, evidence with sources, sources</text>
+        <text class="s" x="682" y="129">that returned nothing, and gaps</text>
+        <rect class="bx" x="1000" y="44" width="380" height="100" rx="4"/>
+        <text class="t" x="1012" y="64">Gemini Enterprise chat</text>
+        <text class="m" x="1012" y="81">app HT-sales-pitch-agent · agent "Solutioning Agent"</text>
+        <text class="s" x="1012" y="97">Build a deck from a pasted brief, find a deck,</text>
+        <text class="s" x="1012" y="113">revise it, add Why HT slides, place an attached image.</text>
+        <text class="s" x="1012" y="129">Users need a Gemini Enterprise seat.</text>
+
+        <!-- Band B: email pipeline -->
+        <rect class="band" x="4" y="176" width="1412" height="300" rx="6"/>
+        <text class="bt" x="20" y="198">EMAIL PIPELINE · CLOUD RUN solutioning-agent (FastAPI)</text>
+        <rect class="bx" x="20" y="236" width="170" height="90" rx="4"/>
+        <text class="t" x="32" y="256">Cloud Scheduler</text>
+        <text class="m" x="32" y="273">solutioning-agent-sweep</text>
+        <text class="m" x="32" y="289">every 30 min · OIDC</text>
+        <rect class="bx" x="220" y="236" width="180" height="90" rx="4"/>
+        <text class="t" x="232" y="256">POST /sweep</text>
+        <text class="s" x="232" y="273">For each connected inbox,</text>
+        <text class="s" x="232" y="289">using its stored token</text>
+        <rect class="bx" x="430" y="236" width="260" height="90" rx="4"/>
+        <text class="t" x="442" y="256">Read the inbox</text>
+        <text class="s" x="442" y="273">New mail since the last sweep, minus</text>
+        <text class="s" x="442" y="289">promotions, own mail and excluded senders</text>
+        <text class="s" x="442" y="305">(HR, payroll, IT, newsletters), plus anything</text>
+        <text class="s" x="442" y="321">labelled generate-deck</text>
+        <rect class="bx" x="720" y="236" width="190" height="90" rx="4"/>
+        <text class="t" x="732" y="256">Skip what's handled</text>
+        <text class="m" x="732" y="273">decisions</text>
+        <text class="m" x="732" y="289">ingestion_threads</text>
+        <text class="s" x="732" y="305">one build per thread</text>
+        <rect class="bx" x="940" y="236" width="200" height="90" rx="4"/>
+        <text class="t" x="952" y="256">Is it a brief?</text>
+        <text class="m" x="952" y="273">gemini-2.5-flash-lite</text>
+        <text class="s" x="952" y="289">extracts client, brief,</text>
+        <text class="s" x="952" y="305">touchpoints, category</text>
+        <rect class="bx" x="1170" y="236" width="210" height="90" rx="4"/>
+        <text class="t" x="1182" y="256">Pub/Sub queue</text>
+        <text class="m" x="1182" y="273">solutioning-agent-build-work</text>
+        <text class="s" x="1182" y="289">5 delivery attempts, then</text>
+        <text class="m" x="1182" y="305">…-build-work-dead</text>
+        <path class="ar" d="M 190 281 L 220 281" marker-end="url(#ah)"/>
+        <path class="ar" d="M 400 281 L 430 281" marker-end="url(#ah)"/>
+        <path class="ar" d="M 690 281 L 720 281" marker-end="url(#ah)"/>
+        <path class="ar" d="M 910 281 L 940 281" marker-end="url(#ah)"/>
+        <path class="ar" d="M 1140 281 L 1170 281" marker-end="url(#ah)"/>
+        <text class="al" x="1155" y="274" text-anchor="middle">yes</text>
+        <path class="ar" d="M 165 144 L 165 160 L 310 160 L 310 236" marker-end="url(#ah)"/>
+        <rect class="bx" x="1170" y="366" width="210" height="80" rx="4"/>
+        <text class="t" x="1182" y="386">POST /work</text>
+        <text class="s" x="1182" y="403">One build per instance,</text>
+        <text class="s" x="1182" y="419">at most 3 at once</text>
+        <rect class="bx" x="940" y="366" width="200" height="80" rx="4"/>
+        <text class="t" x="952" y="386">Run the agent</text>
+        <text class="s" x="952" y="403">One Agent Engine session</text>
+        <text class="s" x="952" y="419">per email thread</text>
+        <rect class="bx" x="720" y="366" width="190" height="80" rx="4"/>
+        <text class="t" x="732" y="386">Label the email</text>
+        <text class="m" x="732" y="403">deck-generated</text>
+        <rect class="bx" x="430" y="366" width="260" height="80" rx="4"/>
+        <text class="t" x="442" y="386">Send the notification</text>
+        <text class="s" x="442" y="403">Sources section built from the</text>
+        <text class="s" x="442" y="419">retrieval log, not the agent's word</text>
+        <rect class="bx" x="220" y="366" width="180" height="80" rx="4"/>
+        <text class="t" x="232" y="386">Briefs sheet</text>
+        <text class="s" x="232" y="403">One row per brief: client,</text>
+        <text class="s" x="232" y="419">category, touchpoints, month</text>
+        <path class="ar" d="M 1275 326 L 1275 366" marker-end="url(#ah)"/>
+        <text class="al" x="1283" y="350">push</text>
+        <path class="ar" d="M 1170 406 L 1140 406" marker-end="url(#ah)"/>
+        <path class="ar" d="M 940 406 L 910 406" marker-end="url(#ah)"/>
+        <path class="ar" d="M 720 406 L 690 406" marker-end="url(#ah)"/>
+        <path class="ar" d="M 430 406 L 400 406" marker-end="url(#ah)"/>
+
+        <!-- Links into the agent -->
+        <path class="ar" d="M 1040 446 L 1040 492 L 150 492 L 150 528" marker-end="url(#ah)"/>
+        <text class="al" x="600" y="486" text-anchor="middle">email builds</text>
+        <path class="ar" d="M 1380 94 L 1406 94 L 1406 506 L 180 506 L 180 528" marker-end="url(#ah)"/>
+        <text class="al" x="860" y="519" text-anchor="middle">chat requests</text>
+
+        <!-- Band C: the agent -->
+        <rect class="band" x="4" y="498" width="1412" height="330" rx="6"/>
+        <text class="bt" x="1100" y="490" text-anchor="start">VERTEX AI AGENT ENGINE</text>
+        <rect class="bx" x="20" y="528" width="280" height="270" rx="4"/>
+        <text class="t" x="32" y="548">Solutioning Agent</text>
+        <text class="m" x="32" y="565">ADK LlmAgent · gemini-3.8-flash</text>
+        <text class="m" x="32" y="581">reasoningEngines/1985844993356464128</text>
+        <text class="s" x="32" y="603">Decides what to research, drafts the</text>
+        <text class="s" x="32" y="619">deck as Deck JSON, revises it on request.</text>
+        <text class="s" x="32" y="641">Model calls time out at 6 min and are</text>
+        <text class="s" x="32" y="657">retried on timeouts, 429s and 5xx.</text>
+        <text class="s" x="32" y="679">Acts as sales.agent@hindustantimes.com</text>
+        <text class="s" x="32" y="695">for Drive, Gmail, Sheets and search,</text>
+        <text class="s" x="32" y="711">with the token in</text>
+        <text class="m" x="32" y="727">solutioning-agent-oauth</text>
+        <text class="s" x="32" y="749">Every research call is logged to</text>
+        <text class="m" x="32" y="765">audit_log</text>
+        <text class="s" x="32" y="781">per source per brief.</text>
+
+        <path class="ar" d="M 300 556 L 320 556 L 320 766"/>
+        <path class="ar" d="M 320 556 L 340 556" marker-end="url(#ah)"/>
+        <path class="ar" d="M 320 626 L 340 626" marker-end="url(#ah)"/>
+        <path class="ar" d="M 320 696 L 340 696" marker-end="url(#ah)"/>
+        <path class="ar" d="M 320 766 L 340 766" marker-end="url(#ah)"/>
+        <rect class="bx" x="340" y="528" width="250" height="56" rx="4"/>
+        <text class="m" x="352" y="547">search_past_decks</text>
+        <text class="s" x="352" y="563">HT's own past pitch decks; an eval</text>
+        <text class="s" x="352" y="577">case can hide its own answer</text>
+        <rect class="bx" x="340" y="598" width="250" height="56" rx="4"/>
+        <text class="m" x="352" y="617">search_web</text>
+        <text class="s" x="352" y="633">Brand, campaigns, competitors, social;</text>
+        <text class="s" x="352" y="647">competitor newspapers dropped</text>
+        <rect class="bx" x="340" y="668" width="250" height="56" rx="4"/>
+        <text class="m" x="352" y="687">search_youtube</text>
+        <text class="s" x="352" y="703">Client and competitor video ads</text>
+        <rect class="bx" x="340" y="738" width="250" height="56" rx="4"/>
+        <text class="m" x="352" y="757">fetch_url</text>
+        <text class="s" x="352" y="773">Reads a page, only on a site already</text>
+        <text class="s" x="352" y="787">named in the email or a result</text>
+        <rect class="bx" x="620" y="528" width="300" height="56" rx="4"/>
+        <text class="t" x="632" y="547">Vertex AI Search · Drive connector</text>
+        <text class="m" x="632" y="563">ht-sales-pitch-agent · answer_query</text>
+        <text class="s" x="632" y="577">"Past Pitch Decks" folder, allow-listed</text>
+        <rect class="bx" x="620" y="598" width="300" height="56" rx="4"/>
+        <text class="t" x="632" y="617">Gemini with Google Search</text>
+        <text class="s" x="632" y="633">Every claim kept only with a resolved,</text>
+        <text class="s" x="632" y="647">permanent source link</text>
+        <rect class="bx" x="620" y="668" width="300" height="56" rx="4"/>
+        <text class="t" x="632" y="687">YouTube Data API v3</text>
+        <text class="m" x="632" y="703">solutioning-agent-youtube-key</text>
+        <rect class="bx" x="620" y="738" width="300" height="56" rx="4"/>
+        <text class="t" x="632" y="757">The public web</text>
+        <text class="s" x="632" y="773">Plain HTTP fetch, readable text only</text>
+        <path class="ar" d="M 590 556 L 620 556" marker-end="url(#ah)"/>
+        <path class="ar" d="M 590 626 L 620 626" marker-end="url(#ah)"/>
+        <path class="ar" d="M 590 696 L 620 696" marker-end="url(#ah)"/>
+        <path class="ar" d="M 590 766 L 620 766" marker-end="url(#ah)"/>
+
+        <rect class="bx" x="960" y="528" width="420" height="270" rx="4"/>
+        <text class="t" x="972" y="548">Deck tools</text>
+        <text class="m" x="972" y="572">lookup_deck</text>
+        <text class="s" x="1132" y="572">find a client's decks (up to five)</text>
+        <text class="m" x="972" y="598">get_deck_outline</text>
+        <text class="s" x="1132" y="598">read every slide and field</text>
+        <text class="m" x="972" y="624">build_solution_deck</text>
+        <text class="s" x="1132" y="624">new deck, with logos and images</text>
+        <text class="m" x="972" y="650">update_deck</text>
+        <text class="s" x="1132" y="650">edit fields; add, delete, move slides</text>
+        <text class="m" x="972" y="676">place_image_from_chat</text>
+        <text class="s" x="1132" y="676">place an attached image if it fits</text>
+        <text class="m" x="972" y="702">add_why_ht_slides</text>
+        <text class="s" x="1132" y="702">HT credentials, fixed figures</text>
+        <text class="s" x="972" y="732">Every change is checked against the HT master</text>
+        <text class="s" x="972" y="748">deck rules before anything is published, and</text>
+        <text class="s" x="972" y="764">re-published to the same file, so the link</text>
+        <text class="s" x="972" y="780">people already have keeps working.</text>
+        <path class="ar" d="M 160 798 L 160 814 L 1170 814 L 1170 798" marker-end="url(#ah)"/>
+
+        <!-- Band D: deck build -->
+        <rect class="band" x="4" y="838" width="1412" height="200" rx="6"/>
+        <text class="bt" x="20" y="860">BUILDING AND PUBLISHING A DECK</text>
+        <path class="ar" d="M 1290 798 L 1290 826 L 1406 826 L 1406 848 L 135 848 L 135 876" marker-end="url(#ah)"/>
+        <rect class="bx" x="20" y="876" width="230" height="140" rx="4"/>
+        <text class="t" x="32" y="896">HT master deck rules</text>
+        <text class="s" x="32" y="913">Fixed spine (cover, brief, …,</text>
+        <text class="s" x="32" y="929">next steps, closing), 7 to 20</text>
+        <text class="s" x="32" y="945">slides, approved layouts and text</text>
+        <text class="s" x="32" y="961">limits, no em dashes, at least 3</text>
+        <text class="s" x="32" y="977">pictures in a new deck. A deck</text>
+        <text class="s" x="32" y="993">that breaks one goes back to the</text>
+        <text class="s" x="32" y="1009">agent with the exact problems.</text>
+        <rect class="bx" x="280" y="876" width="270" height="140" rx="4"/>
+        <text class="t" x="292" y="896">Logos and pictures</text>
+        <text class="s" x="292" y="913">HT logo from the brand assets folder.</text>
+        <text class="s" x="292" y="929">Client logo read from the client's own</text>
+        <text class="s" x="292" y="945">site, or a labelled placeholder.</text>
+        <text class="s" x="292" y="961">Slide pictures generated from their</text>
+        <text class="s" x="292" y="977">descriptions with</text>
+        <text class="m" x="292" y="993">gemini-2.5-flash-image</text>
+        <text class="s" x="292" y="1009">A failure leaves a placeholder.</text>
+        <rect class="bx" x="580" y="876" width="260" height="140" rx="4"/>
+        <text class="t" x="592" y="896">Deck renderer</text>
+        <text class="m" x="592" y="913">Cloud Run · solutioning-agent-renderer</text>
+        <text class="s" x="592" y="935">Deck JSON in, PowerPoint out, using</text>
+        <text class="s" x="592" y="951">HT's fork of presentation-md and the</text>
+        <text class="m" x="592" y="967">ht-media</text>
+        <text class="s" x="645" y="967">theme. Private: only</text>
+        <text class="s" x="592" y="983">the agent can call it.</text>
+        <rect class="bx" x="870" y="876" width="270" height="140" rx="4"/>
+        <text class="t" x="882" y="896">Google Slides in Drive</text>
+        <text class="s" x="882" y="913">Folder "Agent Generated Decks",</text>
+        <text class="s" x="882" y="929">owned by sales.agent@.</text>
+        <text class="s" x="882" y="951">Read-only for hindustantimes.com</text>
+        <text class="s" x="882" y="967">and htdigital.in. To edit by hand,</text>
+        <text class="s" x="882" y="983">make a copy; later chat edits</text>
+        <text class="s" x="882" y="999">won't reach the copy.</text>
+        <rect class="bx" x="1170" y="876" width="210" height="140" rx="4"/>
+        <text class="t" x="1182" y="896">Deck of record</text>
+        <text class="m" x="1182" y="913">BigQuery · briefs</text>
+        <text class="s" x="1182" y="935">The deck as Deck JSON,</text>
+        <text class="s" x="1182" y="951">its link and file id. Every</text>
+        <text class="s" x="1182" y="967">revision starts from here,</text>
+        <text class="s" x="1182" y="983">never from the Slides file.</text>
+        <path class="ar" d="M 250 946 L 280 946" marker-end="url(#ah)"/>
+        <path class="ar" d="M 550 946 L 580 946" marker-end="url(#ah)"/>
+        <path class="ar" d="M 840 946 L 870 946" marker-end="url(#ah)"/>
+        <path class="ar" d="M 1140 946 L 1170 946" marker-end="url(#ah)"/>
+
+        <!-- Band E: shared data and credentials -->
+        <rect class="band" x="4" y="1048" width="1412" height="136" rx="6"/>
+        <text class="bt" x="20" y="1070">SHARED DATA AND CREDENTIALS</text>
+        <rect class="bx" x="20" y="1084" width="440" height="88" rx="4"/>
+        <text class="t" x="32" y="1104">Secret Manager</text>
+        <text class="m" x="32" y="1121">solutioning-agent-oauth</text>
+        <text class="s" x="200" y="1121">sales.agent@ token</text>
+        <text class="m" x="32" y="1137">gmail-&lt;hash&gt;</text>
+        <text class="s" x="200" y="1137">one per connected inbox</text>
+        <text class="m" x="32" y="1153">…-oauth-client · …-state-key · …-youtube-key</text>
+        <rect class="bx" x="490" y="1084" width="440" height="88" rx="4"/>
+        <text class="t" x="502" y="1104">BigQuery · solutioning_agent</text>
+        <text class="m" x="502" y="1121">briefs · audit_log · users</text>
+        <text class="m" x="502" y="1137">decisions · ingestion_threads · sweep_state</text>
+        <text class="s" x="502" y="1153">Evals use solutioning_agent_eval instead</text>
+        <rect class="bx" x="960" y="1084" width="420" height="88" rx="4"/>
+        <text class="t" x="972" y="1104">Google Drive (sales.agent@)</text>
+        <text class="s" x="972" y="1121">"Past Pitch Decks": HT's prior decks (shared in)</text>
+        <text class="s" x="972" y="1137">HT brand assets: the HT logo</text>
+        <text class="s" x="972" y="1153">"Agent Generated Decks", with "Eval Decks" inside</text>
+      </svg>

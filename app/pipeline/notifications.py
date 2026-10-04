@@ -34,9 +34,9 @@ def send_reauth_prompt(email_address: str) -> None:
         f"be renewed.\n\n"
         f"Click here to reconnect (takes 10 seconds, same as the first time):\n"
         f"{onboarding_url}\n\n"
-        f"Nothing else has changed. This happens automatically about once a "
-        f"week while this is still in early testing, and should stop once it "
-        f"moves out of testing mode."
+        f"Nothing else has changed. This happens only when access to your "
+        f"inbox was removed, for example by revoking it in your Google account "
+        f"settings or by an IT policy change."
     )
     message = email.mime.text.MIMEText(body)
     message["to"] = email_address
