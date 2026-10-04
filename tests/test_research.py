@@ -1030,6 +1030,7 @@ def test_an_eval_case_can_hide_hts_own_deck_from_past_deck_search():
     ctx = MagicMock()
     ctx.state = {research.EVAL_HIDDEN_DECKS_KEY: ["A" * 33]}
     with patch.object(research, "PAST_DECKS_ENGINE", "e"), \
+         patch.object(research, "get_credentials", return_value=None), \
          patch.object(research, "PAST_DECKS_FOLDER_ID", "folder"), \
          patch.object(research, "_past_deck_file_ids", return_value=frozenset({"A" * 33, "P" * 33})), \
          patch.object(research, "_log_retrieval"), _fake_discoveryengine(answer=answer):
