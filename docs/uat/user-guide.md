@@ -8,7 +8,7 @@ the first time. It takes about five minutes to read.
 When a client brief lands in your inbox, the Solutioning Agent drafts a first
 version of the solution deck for you. It reads the brief, researches the
 client and its competitors, looks through HT's past pitch decks for similar
-work, and builds a Google Slides deck in HT's house style. About 15 to 45
+work, and builds a Google Slides deck in HT's house style. About 10 to 20
 minutes after the brief arrives, you get an email with a link to the deck and
 the research behind it. You can also build and change decks by chatting with
 the agent in Gemini Enterprise.
@@ -43,7 +43,7 @@ not a personal one.
 
 ## Step 2: Let briefs arrive as usual
 
-You don't need to do anything differently. Every 30 minutes the agent checks
+You don't need to do anything differently. Every 5 minutes the agent checks
 for new email in your inbox and decides whether each message is a client
 brief (a request for a proposal, campaign idea or solution). Newsletters,
 internal HR and IT mail, and ordinary conversation are ignored.

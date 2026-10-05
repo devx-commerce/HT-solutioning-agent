@@ -2,7 +2,7 @@
 
 ## The steps
 
-1. **Every 30 minutes** (`settings.sweep_schedule`), Cloud Scheduler calls the
+1. **Every 5 minutes** (`settings.sweep_schedule`), Cloud Scheduler calls the
    pipeline's `/sweep`.
 2. **For each connected inbox**, the pipeline lists email received since the
    last check, leaving out:
@@ -33,8 +33,8 @@
    - adds a row to the briefs sheet (client, brief, touchpoints, category,
      month).
 
-From the email arriving to the "deck drafted" email: typically 15 to 45
-minutes, depending on where in the 30-minute cycle it arrived.
+From the email arriving to the "deck drafted" email: typically 10 to 20
+minutes, depending on where in the 5-minute cycle it arrived.
 
 ## What it never does
 

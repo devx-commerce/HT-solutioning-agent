@@ -14,7 +14,7 @@ edits and prices every deck before it goes to a client.
 ## What it does
 
 - **Reads briefs from email.** Solutioning team members connect their inbox once.
-  Every 30 minutes the agent checks connected inboxes for new client briefs,
+  Every 5 minutes the agent checks connected inboxes for new client briefs,
   ignores everything else, and builds a deck for each brief it finds.
 - **Researches before drafting.** It searches HT's library of past pitch
   decks, the web (news, campaigns, social media), YouTube and the client's

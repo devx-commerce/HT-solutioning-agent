@@ -23,7 +23,7 @@ config.yaml has problems; nothing was deployed:
 | `deck_reader_domains` | hindustantimes.com, htdigital.in | Domains that can open (read only) the decks the agent creates. Applies to new decks. |
 | `excluded_senders` | HR, IT, payroll and newsletter addresses | Mail from these addresses is never treated as a brief, and never sent to the model. |
 | `competitor_outlets` | Times Group, Jagran, Bhaskar, Amar Ujala, Indian Express, The Hindu, The Tribune | Publications the agent never cites or names. A domain covers its subdomains. |
-| `sweep_schedule` | `*/30 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
+| `sweep_schedule` | `*/5 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
 | `max_slides` | 20 | Longest deck the agent may build (7 to 30). |
 | `min_images` | 3 | Pictures a new deck must have (0 to 10). Existing decks stay editable whatever this is. |
 | `models.agent` | gemini-3.8-flash | Plans research, drafts and revises decks. |

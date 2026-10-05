@@ -50,7 +50,7 @@ settings:
 
   # How often inboxes are checked for new briefs (cron, India time).
   # Deploying never pauses or resumes the check; see docs/operations.
-  sweep_schedule: "*/30 * * * *"
+  sweep_schedule: "*/5 * * * *"
 
   # Deck rules.
   max_slides: 20   # longest deck the agent may build (7 to 30)
