@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------
 settings:
 
-  # Who receives the weekly eval summary. (Each "Solution deck drafted" email
+  # Who receives the eval summary. (Each "Solution deck drafted" email
   # goes to the inbox the brief arrived in.)
   eval_summary_email: sales.agent@hindustantimes.com
 
@@ -73,11 +73,11 @@ settings:
   ht_assets_folder_id: 1SMqLJ-lHAYSDMb2lvZ-kMPJIOS6TbLBN   # holds the HT logo
   briefs_sheet_id: 1q-U5t4d_F0KmWuKJcsccCmgAiqPgs1pUhbo9HIAcbzI
 
-  # Evals: the short run after every deploy, and the full weekly run.
+  # Evals run when started by hand (docs/operations/evals.md). Optionally, a
+  # short run after every deploy as well.
   evals:
-    after_deploy: none               # none, smoke (about 15 min) or full (about 1 hour); see docs/operations/evals.md for cost
+    after_deploy: none               # none, smoke (about 15 min) or full (about 1 hour)
     smoke_cases: [pentonic, eli-lilly]
-    weekly_schedule: "0 2 * * 0"     # Sundays 02:00 India time; full set, 3 runs
 
 # ---------------------------------------------------------------------------
 # Infrastructure: change only when moving to another project

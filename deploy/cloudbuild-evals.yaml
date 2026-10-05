@@ -1,8 +1,8 @@
-# The weekly full eval: every real brief three times, then the revision chats,
-# emailed together with the week's usage report (bigquery/weekly_report.sql).
-# Run by the "solutioning-agent-weekly-evals" trigger on the schedule in
-# config.yaml (settings.evals.weekly_schedule). Never deploys anything; the
-# summary is emailed to settings.eval_summary_email and kept in the bucket.
+# The full eval: every real brief three times, then the revision chats,
+# emailed together with the last 7 days' usage report (bigquery/weekly_report.sql).
+# Run by hand: Cloud Build > Triggers > Run on "solutioning-agent-weekly-evals".
+# Never deploys anything; the summary is emailed to settings.eval_summary_email
+# and kept in the bucket.
 timeout: 18000s
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -22,4 +22,4 @@ steps:
         START=$$(date +%s)
         bash evals/run.sh briefs "" 3 || true
         bash evals/run.sh refinement || true
-        python -m evals.report --since "$$START" --label "weekly" --with-usage || true
+        python -m evals.report --since "$$START" --label "full run" --with-usage || true

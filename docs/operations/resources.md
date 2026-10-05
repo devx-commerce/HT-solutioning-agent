@@ -29,7 +29,6 @@ Inventory taken 5 Oct 2026.
 | Pub/Sub topic | `solutioning-agent-build-work-dead` | Briefs that failed to build five times. |
 | Pub/Sub subscription | `solutioning-agent-build-work-sub` | Pushes each brief to the pipeline's `/work`. |
 | Cloud Scheduler | `solutioning-agent-sweep` | Checks connected inboxes on `settings.sweep_schedule`. Pause it in the Cloud Scheduler console to stop reading inboxes; deploys never change that. Scheduler jobs can't carry labels. |
-| Cloud Scheduler | `solutioning-agent-weekly-evals` | Runs the weekly eval. Created by the deploy once its Cloud Build trigger exists. |
 
 ## Data
 

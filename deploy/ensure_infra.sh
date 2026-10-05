@@ -81,27 +81,7 @@ if ! gcloud storage buckets describe "gs://$EVAL_RESULTS_BUCKET" $P >/dev/null 2
   say "created bucket $EVAL_RESULTS_BUCKET"
 fi
 
-# --- the weekly full eval: a scheduler job that runs the "weekly evals" trigger ---
-# The trigger itself is made once in the Cloud Build console (2nd gen, in
-# $REGION), after the GitHub repository is connected
-# (docs/operations/deploy.md); until then this waits.
-TRIGGER="solutioning-agent-weekly-evals"
-TRIGGER_ID=$(gcloud builds triggers describe "$TRIGGER" $P --region="$REGION" --format='value(id)' 2>/dev/null || true)
-if [[ -n "$TRIGGER_ID" ]]; then
-  URI="https://cloudbuild.googleapis.com/v1/projects/$PROJECT_ID/locations/$REGION/triggers/$TRIGGER_ID:run"
-  if gcloud scheduler jobs describe "$TRIGGER" $P --location="$REGION" >/dev/null 2>&1; then
-    gcloud scheduler jobs update http "$TRIGGER" $P --location="$REGION" \
-      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" \
-      --uri="$URI" --message-body='{}' >/dev/null
-  else
-    gcloud scheduler jobs create http "$TRIGGER" $P --location="$REGION" \
-      --schedule="$WEEKLY_EVAL_SCHEDULE" --time-zone="Asia/Kolkata" \
-      --uri="$URI" --http-method=POST --message-body='{}' \
-      --oauth-service-account-email="$RUNTIME_SA" >/dev/null
-    say "scheduled $TRIGGER ($WEEKLY_EVAL_SCHEDULE, India time)"
-  fi
-else
-  say "weekly evals not scheduled yet: create the $TRIGGER trigger first"
-fi
+# Evals run only when started by hand (Cloud Build > Triggers > Run on
+# solutioning-agent-weekly-evals); nothing schedules them.
 
 say "done"

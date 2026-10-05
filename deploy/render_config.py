@@ -74,7 +74,6 @@ def problems(cfg: dict) -> list[str]:
          "must be a list of Drive folder ids")
     evals = s.get("evals") or {}
     need(evals, "after_deploy", lambda v: v in ("smoke", "full", "none"), "evals.after_deploy must be smoke, full or none")
-    need(evals, "weekly_schedule", lambda v: bool(_CRON.match(str(v))), "evals.weekly_schedule must be a cron schedule")
     need(evals, "smoke_cases", lambda v: isinstance(v, list) and v, "evals.smoke_cases must list at least one case")
 
     for key in ("project_id", "project_number", "region", "model_location", "image_location", "bigquery_dataset",
@@ -195,7 +194,6 @@ def deploy_env(cfg: dict) -> dict[str, str]:
         "EVAL_SUMMARY_EMAIL": s["eval_summary_email"],
         "EVALS_AFTER_DEPLOY": s["evals"]["after_deploy"],
         "SMOKE_CASES": ",".join(s["evals"]["smoke_cases"]),
-        "WEEKLY_EVAL_SCHEDULE": s["evals"]["weekly_schedule"],
     }
 
 

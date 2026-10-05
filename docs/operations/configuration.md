@@ -18,7 +18,7 @@ config.yaml has problems; nothing was deployed:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the weekly eval summary (and the after-deploy one, if turned on). |
+| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the eval summary. |
 | `onboarding_domains` | hindustantimes.com, htdigital.in | Google Workspace domains whose people may connect an inbox. |
 | `deck_reader_domains` | hindustantimes.com, htdigital.in | Domains that can open (read only) the decks the agent creates. Applies to new decks. |
 | `excluded_senders` | HR, IT, payroll and newsletter addresses | Mail from these addresses is never treated as a brief, and never sent to the model. |
@@ -35,9 +35,8 @@ config.yaml has problems; nothing was deployed:
 | `past_decks_folder_ids` | "Past Pitch Decks" | Folders the agent may cite as HT's past work. |
 | `ht_assets_folder_id` | HT brand assets | Folder holding the HT logo (any image with "logo" in its name). |
 | `briefs_sheet_id` | The briefs sheet | Sheet that gets one row per brief from email. |
-| `evals.after_deploy` | none | Evals after each deploy: `none`, `smoke` (about 15 minutes, about ₹300) or `full` (about an hour). Evals run weekly regardless. |
+| `evals.after_deploy` | none | Evals after each deploy: `none`, `smoke` (about 15 minutes) or `full` (about an hour). Otherwise evals run only when started by hand. |
 | `evals.smoke_cases` | pentonic, eli-lilly | Which eval cases the smoke run uses. |
-| `evals.weekly_schedule` | `0 2 * * 0` | When the full weekly eval runs (Sundays 02:00 India time). |
 
 A Drive folder or sheet id is the long code in its URL, for example
 `https://drive.google.com/drive/folders/`**`1ethtG7qzfsL1QOsutGRqr9MaeN9vpzIF`**.

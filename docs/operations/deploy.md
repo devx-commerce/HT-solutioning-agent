@@ -61,8 +61,7 @@ organisation only means repeating these steps.
    - Event: manual invocation; same repository, branch `prod`
    - Configuration: `deploy/cloudbuild-evals.yaml`
    - Same service account
-4. Deploy once. The infrastructure step sees the weekly trigger and creates
-   the scheduler job that runs it on `settings.evals.weekly_schedule`.
+   It runs only when someone clicks **Run** on it ([evals.md](evals.md)).
 
 ## First-time setup in a new project
 

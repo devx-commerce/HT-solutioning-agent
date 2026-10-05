@@ -1,9 +1,9 @@
 """Summarise the eval results from this run, keep them, and email the summary.
 
     python -m evals.report --since <unix time> --label "after deploy"
-    python -m evals.report --since <unix time> --label weekly --with-usage
+    python -m evals.report --since <unix time> --label "full run" --with-usage
 
---with-usage adds the week's usage report (bigquery/weekly_report.sql) to the
+--with-usage adds the last 7 days' usage report (bigquery/weekly_report.sql) to the
 email as one table of key figures.
 
 Reads ADK's result files written since --since, stores them with the summary
@@ -244,7 +244,7 @@ def main() -> None:
             figures = key_figures(usage_report())
         except Exception as exc:  # noqa: BLE001 - the eval summary still goes out
             footer = f"The usage report could not be run: {exc}\n{footer}".strip()
-    title = "Solutioning Agent weekly report" if args.with_usage else "Solutioning Agent evals"
+    title = "Solutioning Agent report" if args.with_usage else "Solutioning Agent evals"
     period = (f"{(now - timedelta(days=7)).strftime('%-d %b')} to {now.strftime('%-d %b %Y')}"
               if args.with_usage else now.strftime("%-d %b %Y"))
     body = "\n\n".join(p for p in [f"{title}, {period}", _figures_text(figures),
