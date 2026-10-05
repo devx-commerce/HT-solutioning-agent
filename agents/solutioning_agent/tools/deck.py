@@ -237,8 +237,8 @@ def _lock_to_readers(drive, file_id: str) -> None:
                 body={"type": "domain", "role": "reader", "domain": domain},
                 fields="id",
             ).execute()
-        except Exception:  # noqa: BLE001 - surfaced by the deck simply not being shared
-            pass
+        except Exception as exc:  # noqa: BLE001 - never stops the deck
+            logs.event("deck.share_failed", "ERROR", file_id=file_id, domain=domain, error=str(exc)[:300])
 
 
 def _save_brief(brief_id: str, **fields) -> None:
