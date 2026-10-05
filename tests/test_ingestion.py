@@ -249,8 +249,7 @@ def test_a_queued_build_carries_the_inbox_it_came_from(mock_storage, mock_mail_u
 def _payload(**extra):
     return {"thread_id": "t1", "gmail_secret": "s", "message_id": "m1", "subject": "x",
             "thread_context": "ctx", "received_at": "2026-10-05T10:00:00+00:00",
-            "client_name": "Acme", "brief": "b", "touchpoints": "t", "category": "c",
-            "dry_run": True, **extra}
+            "client_name": "Acme", "brief": "b", "touchpoints": "t", "category": "c", **extra}
 
 
 @pytest.mark.parametrize("payload, expected", [
@@ -260,13 +259,55 @@ def _payload(**extra):
 def test_the_notification_goes_to_the_source_inbox(monkeypatch, payload, expected):
     monkeypatch.setenv("AGENT_EMAIL", "sales.agent@hindustantimes.com")
     with patch("app.pipeline.ingestion.storage") as storage, \
+         patch("app.pipeline.ingestion.agent_client") as agent, \
          patch("app.pipeline.ingestion.labels"), \
          patch("app.pipeline.ingestion.sheet"), \
          patch("app.pipeline.ingestion.notifications") as notifications, \
          patch("app.auth.gmail_client.get_service_for_user"):
         storage.thread_status.return_value = None
+        agent.invoke_agent.return_value = "Deck built."
+        storage.built_deck_link.return_value = "https://docs.google.com/presentation/d/D1/edit"
         ingestion.execute_build(payload)
     assert notifications.send_deck_notification.call_args.args[0] == expected
+
+
+def _build(payload, deck_link, reply="Here is the deck: https://docs.google.com/presentation/d/OLD/edit"):
+    with patch("app.pipeline.ingestion.storage") as storage, \
+         patch("app.pipeline.ingestion.agent_client") as agent, \
+         patch("app.pipeline.ingestion.labels") as labels, \
+         patch("app.pipeline.ingestion.sheet") as sheet, \
+         patch("app.pipeline.ingestion.notifications") as notifications, \
+         patch("app.auth.gmail_client.get_service_for_user"):
+        storage.thread_status.return_value = None
+        storage.built_deck_link.return_value = deck_link
+        agent.invoke_agent.return_value = reply
+        outcome = ingestion.execute_build(payload)
+    return outcome, labels, sheet, notifications, storage
+
+
+def test_an_email_is_labelled_only_when_a_deck_was_saved_for_its_brief():
+    outcome, labels, sheet, notifications, storage = _build(_payload(), deck_link=None)
+    assert outcome == "failed"
+    labels.apply_label.assert_not_called()
+    sheet.append_row.assert_not_called()
+    notifications.send_deck_notification.assert_not_called()
+    storage.mark_thread_failed.assert_called_once()
+
+
+def test_the_deck_drafted_email_links_the_saved_deck_not_one_the_reply_mentions():
+    saved = "https://docs.google.com/presentation/d/NEW/edit"
+    outcome, labels, _, notifications, _ = _build(_payload(), deck_link=saved)
+    assert outcome == "built"
+    labels.apply_label.assert_called_once()
+    assert notifications.send_deck_notification.call_args.kwargs["deck_link"] == saved
+
+
+def test_a_dry_run_never_labels_emails_writes_the_sheet_or_sends_email():
+    outcome, labels, sheet, notifications, storage = _build(_payload(dry_run=True), deck_link=None)
+    assert outcome == "dry_run"
+    labels.apply_label.assert_not_called()
+    sheet.append_row.assert_not_called()
+    notifications.send_deck_notification.assert_not_called()
 
 
 @pytest.mark.parametrize("subject", [

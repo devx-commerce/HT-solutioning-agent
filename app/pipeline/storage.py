@@ -117,6 +117,34 @@ def record_decision(
 # --- thread-level intake tracking -------------------------------------------
 
 
+def built_deck_link(brief_id: str, reply_link: str | None, since: datetime) -> str | None:
+    """The link of the deck saved for this brief since `since`, or None.
+
+    The agent saves every deck it publishes in `briefs` under the brief_id it
+    was given. `reply_link` covers a deck saved under another id (the agent
+    passed none) as long as that same deck was saved during this build.
+    """
+    file_id = reply_link.rsplit("/", 1)[-1] if reply_link else ""
+    rows = list(
+        _client()
+        .query(
+            f"SELECT deck_link FROM `{PROJECT}.{DATASET}.briefs` "
+            f"WHERE (brief_id = @brief_id OR deck_file_id = @file_id) "
+            f"AND deck_file_id IS NOT NULL AND updated_at >= @since "
+            f"ORDER BY updated_at DESC LIMIT 1",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id),
+                    bigquery.ScalarQueryParameter("file_id", "STRING", file_id),
+                    bigquery.ScalarQueryParameter("since", "TIMESTAMP", since.isoformat()),
+                ]
+            ),
+        )
+        .result()
+    )
+    return rows[0]["deck_link"] if rows else None
+
+
 def thread_status(thread_id: str) -> dict | None:
     rows = list(
         _client()

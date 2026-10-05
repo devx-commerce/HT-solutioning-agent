@@ -22,9 +22,8 @@ Two testing knobs on the classify-and-enqueue half, both off by default:
              candidate gets reprocessed as if seen for the first time.
              Never advances the real watermark.
   dry_run  — carried through to the enqueued payload; execute_build skips
-             the actual Agent Engine call and treats it as a deterministic
-             success, so the rest of the pipeline is verifiable without
-             Agent Engine being deployed or reliable yet.
+             the agent and stops there. It never labels an email, sends a
+             "deck drafted" email or writes a sheet row.
 """
 
 from __future__ import annotations
@@ -46,7 +45,6 @@ from . import storage
 from ..logs import event
 
 _NOISE_FILTER = "-category:promotions -category:social -in:chats"
-_DRY_RUN_REPLY = "[dry-run] https://docs.google.com/presentation/d/DRY-RUN-NO-DECK-BUILT/edit"
 
 
 # Internal senders whose mail is never a client brief (HR, payroll, IT, the
@@ -333,22 +331,26 @@ def execute_build(payload: dict) -> str:
     received_at = datetime.fromisoformat(payload["received_at"])
 
     if payload.get("dry_run"):
-        # Deterministic, on purpose — no text-parsing of a model's reply.
-        # The real fix for the non-dry-run path below is still a
-        # structured tool result instead of string-matching a URL out of
-        # free text; this sidesteps needing that fix while deck generation
-        # is being built as a separate component.
-        reply = _DRY_RUN_REPLY
-    else:
-        reply = agent_client.invoke_agent(
-            prompts.brief_request(subject, thread_context, thread_id),
-            session_user_id=f"ingestion-{thread_id}",
-        )
-        if "docs.google.com/presentation" not in reply:
-            event("build.failed", "ERROR", thread_id=thread_id, client=payload.get("client_name"),
-                  agent_reply=reply[:300])
-            storage.mark_thread_failed(thread_id, reply[:500])
-            return "failed"
+        # A test sweep never labels an email, sends a "deck drafted" email or
+        # writes a sheet row: those would say a deck exists when none does.
+        storage.mark_thread_failed(thread_id, "dry run: no deck built")
+        event("build.dry_run", thread_id=thread_id, client=payload.get("client_name"))
+        return "dry_run"
+
+    build_started = datetime.now(timezone.utc)
+    reply = agent_client.invoke_agent(
+        prompts.brief_request(subject, thread_context, thread_id),
+        session_user_id=f"ingestion-{thread_id}",
+    )
+    # The deck of record, not a link in the reply: the reply can mention an
+    # older deck, and only a deck saved for this brief during this build
+    # earns the label, the "deck drafted" email and the sheet row.
+    deck_link = storage.built_deck_link(thread_id, _deck_link(reply), since=build_started)
+    if not deck_link:
+        event("build.failed", "ERROR", thread_id=thread_id, client=payload.get("client_name"),
+              reason="no deck saved for this brief", agent_reply=reply[:300])
+        storage.mark_thread_failed(thread_id, reply[:500])
+        return "failed"
 
     labels.apply_label(gmail, message_id, labels.DECK_GENERATED_LABEL)
     notifications.send_deck_notification(
@@ -356,7 +358,7 @@ def execute_build(payload: dict) -> str:
         payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
         payload["client_name"],
         payload["brief"],
-        deck_link=_deck_link(reply),
+        deck_link=deck_link,
         evidence=reply,
         retrievals=storage.retrieval_summary(thread_id),
         allowed_urls=storage.retrieved_urls(thread_id),
@@ -370,7 +372,7 @@ def execute_build(payload: dict) -> str:
     )
     storage.mark_thread_sheet_written(thread_id)
     storage.mark_thread_built(thread_id, brief_id=thread_id)
-    event("build.done", thread_id=thread_id, client=payload["client_name"], deck=_deck_link(reply),
+    event("build.done", thread_id=thread_id, client=payload["client_name"], deck=deck_link,
           notified=payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
           build_minutes=round((time.time() - started) / 60, 1),
           minutes_since_email=round((datetime.now(timezone.utc) - received_at).total_seconds() / 60, 1))

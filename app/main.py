@@ -130,9 +130,8 @@ def sweep(force: bool = False, dry_run: bool = False) -> dict:
                                  prior decisions. Never touches the real
                                  watermark. Expect duplicate rows on a
                                  mailbox already swept normally.
-      POST /sweep?dry_run=true  skip the actual Agent Engine call, verify
-                                 everything else (classification, labels,
-                                 the sheet row) without a deployed agent.
+      POST /sweep?dry_run=true  classify and queue, but build nothing: no
+                                 label, no email, no sheet row.
 
     Combine as POST /sweep?force=true&dry_run=true to replay the same test
     inbox repeatedly while iterating on the classifier or the sheet output.
