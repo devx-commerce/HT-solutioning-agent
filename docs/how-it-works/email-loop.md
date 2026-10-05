@@ -20,7 +20,10 @@
 4. **Is it a brief?** `gemini-2.5-flash-lite` reads the whole thread and
    decides whether it asks for a proposal, campaign or solution. If so, it
    extracts the client, a one-paragraph brief, the touchpoints and a category.
-   A labelled email skips this decision; only the extraction runs.
+   Calendar invitations are never briefs (they're recognised by their subject,
+   without asking the model), and neither are emails that only ask about rates,
+   costing or pricing. A labelled email skips this decision; only the
+   extraction runs.
 5. **The brief is queued** on Pub/Sub. The pipeline builds one brief at a
    time per instance, at most three at once; a brief that fails is retried,
    up to five times.

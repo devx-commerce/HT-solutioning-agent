@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 
 from google import genai
@@ -37,6 +38,14 @@ TOUCHPOINTS = ["Print", "Digital", "Integrated", "Events"]
 _CLASSIFY_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     properties={
+        # Answered first, on its own: a small model applies this test far more
+        # reliably as a field than as a rule buried in the instruction.
+        "only_rates_or_costing": types.Schema(
+            type=types.Type.BOOLEAN,
+            description="True if everything asked in the thread is about rates, rate cards, "
+                        "costing, pricing, feasibility of a format or approvals, with no ask "
+                        "for ideas, a plan or a solution.",
+        ),
         "is_solution_request": types.Schema(type=types.Type.BOOLEAN),
         "reason": types.Schema(type=types.Type.STRING),
         "confidence": types.Schema(type=types.Type.NUMBER),
@@ -47,7 +56,9 @@ _CLASSIFY_SCHEMA = types.Schema(
         ),
         "category": types.Schema(type=types.Type.STRING, nullable=True),
     },
-    required=["is_solution_request", "reason", "confidence"],
+    required=["only_rates_or_costing", "is_solution_request", "reason", "confidence"],
+    property_ordering=["only_rates_or_costing", "is_solution_request", "reason", "confidence",
+                       "client_name", "brief", "touchpoints", "category"],
 )
 
 _EXTRACT_SCHEMA = types.Schema(
@@ -85,6 +96,19 @@ class ExtractResult:
     category: str | None
 
 
+def clean_client_name(name: str | None) -> str | None:
+    """The brand or company alone.
+
+    A short bracket is part of the name ("Sheela Foam (Sleepwell)"); a longer
+    one is the model explaining itself ("Haleon (implied by email address and
+    brands mentioned)") and is dropped.
+    """
+    if not name:
+        return None
+    cleaned = re.sub(r"\s*\(([^)]*)\)", lambda m: m.group(0) if len(m.group(1).split()) <= 3 else "", name)
+    return cleaned.strip() or None
+
+
 def _client() -> genai.Client:
     return genai.Client(vertexai=True, project=PROJECT, location=MODEL_LOCATION)
 
@@ -95,8 +119,18 @@ solutioning request that should produce a first-draft solution deck — as oppos
 an unrelated email, an internal note, a newsletter, or a reply that doesn't
 itself constitute a new ask.
 
+These are never requests, even when they name a client or brand:
+- calendar invitations, acceptances and meeting updates;
+- asks only for HT's rates, rate cards, pricing or media costs, with nothing
+  asked about ideas, a plan or a solution; this includes HT's own sales and
+  pricing teams discussing rates or packages between themselves;
+- a thread forwarded with no new ask of its own, where the earlier messages
+  are only about rates, approvals or scheduling.
+
 If it is a request, also extract what the email actually states:
-- client_name: the client or brand asking, if named.
+- client_name: only the client's brand or company name as written, such as
+  "Haleon" or "Sheela Foam (Sleepwell)". Never an explanation of how you
+  worked it out. Null if the email doesn't name one.
 - brief: one or two sentences summarising the ask, in your own words.
 - touchpoints: exactly one of {TOUCHPOINTS}, ONLY if the email unambiguously
   states the channel. Leave null if it's unclear or unstated — never guess.
@@ -116,7 +150,9 @@ what's extractable from it.
 Set has_content=false only if the email genuinely has nothing to build a
 deck from (empty, unrelated content accidentally labeled, pure metadata).
 Otherwise has_content=true and extract:
-- client_name, brief: as above.
+- client_name: only the client's brand or company name, never an
+  explanation; null if not named.
+- brief: one or two sentences summarising the ask.
 - touchpoints: exactly one of {TOUCHPOINTS}, only if unambiguous, else null.
 - category: only if unambiguous, else null.
 
@@ -147,10 +183,10 @@ def classify_and_extract(subject: str, body: str) -> ClassifyResult:
     )
     data = json.loads(response.text)
     return ClassifyResult(
-        is_solution_request=data["is_solution_request"],
-        reason=data["reason"],
+        is_solution_request=data["is_solution_request"] and not data.get("only_rates_or_costing"),
+        reason=("only rates or costing asked: " if data.get("only_rates_or_costing") else "") + data["reason"],
         confidence=data.get("confidence", 0.0),
-        client_name=data.get("client_name"),
+        client_name=clean_client_name(data.get("client_name")),
         brief=data.get("brief"),
         touchpoints=data.get("touchpoints"),
         category=data.get("category"),
@@ -173,7 +209,7 @@ def extract_only(subject: str, body: str) -> ExtractResult:
     data = json.loads(response.text)
     return ExtractResult(
         has_content=data["has_content"],
-        client_name=data.get("client_name"),
+        client_name=clean_client_name(data.get("client_name")),
         brief=data.get("brief"),
         touchpoints=data.get("touchpoints"),
         category=data.get("category"),

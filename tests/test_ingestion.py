@@ -267,3 +267,30 @@ def test_the_notification_goes_to_the_source_inbox(monkeypatch, payload, expecte
         storage.thread_status.return_value = None
         ingestion.execute_build(payload)
     assert notifications.send_deck_notification.call_args.args[0] == expected
+
+
+@pytest.mark.parametrize("subject", [
+    "Invitation: Meeting with Neha regarding Pronamel Kids and Sensodyne @ Mon Oct 5, 2026 3:30pm",
+    "Updated invitation: Emami x HT Media @ Tue Oct 6, 2026",
+    "Accepted: Senco review @ Wed Oct 7, 2026",
+    "Invitation with note: Liberty brief walkthrough",
+])
+@patch("app.pipeline.ingestion.pubsub")
+@patch("app.pipeline.ingestion.classify")
+@patch("app.pipeline.ingestion.mail_utils")
+@patch("app.pipeline.ingestion.storage")
+def test_a_calendar_invitation_is_never_a_brief(mock_storage, mock_mail_utils, mock_classify, mock_pubsub, subject):
+    mock_storage.decision_exists.return_value = False
+    mock_storage.thread_status.return_value = None
+    msg = _fake_message(); msg.subject = subject
+    mock_mail_utils.fetch_message.return_value = msg
+
+    assert ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True) == "rejected"
+    mock_classify.classify_and_extract.assert_not_called()
+    mock_pubsub.publish_build_task.assert_not_called()
+    mock_storage.record_decision.assert_called_once_with("m1", "not_a_request", "calendar invitation", confidence=1.0)
+
+
+@pytest.mark.parametrize("subject", ["Re: Invitation to pitch for Liberty", "Brief: Decathlon campus invitation event"])
+def test_a_brief_that_mentions_an_invitation_is_still_classified(subject):
+    assert not ingestion._CALENDAR_SUBJECT.match(subject)

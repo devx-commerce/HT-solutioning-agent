@@ -155,6 +155,12 @@ def _list_branch_b(gmail) -> list[str]:
     return [m["id"] for m in resp.get("messages", [])]
 
 
+# Google Calendar's subjects for invitations and replies to them.
+_CALENDAR_SUBJECT = re.compile(
+    r"^\s*(updated invitation|invitation|accepted|declined|tentatively accepted|"
+    r"cancell?ed event|new event|updated event)( with note)?\s*:", re.IGNORECASE)
+
+
 def _thread_lock_reason(existing_thread: dict | None, triggered_by: str) -> str | None:
     """None means proceed, otherwise the reason it's blocked.
 
@@ -189,6 +195,15 @@ def _process_branch_a(
             storage.record_decision(message_id, "thread_already_active", lock_reason)
         event("email.skipped", inbox=mailbox, message_id=message_id, subject=msg.subject, reason=lock_reason)
         return "skipped"
+
+    # A calendar invitation names clients and brands but is never a brief; no
+    # need to ask the model.
+    if _CALENDAR_SUBJECT.match(msg.subject or ""):
+        if not force:
+            storage.record_decision(message_id, "not_a_request", "calendar invitation", confidence=1.0)
+        event("email.not_a_brief", inbox=mailbox, message_id=message_id, sender=msg.sender,
+              subject=msg.subject, reason="calendar invitation")
+        return "rejected"
 
     # Classify against the whole thread so far, not just this one message —
     # the substance (budget, timeline, a scope change) often lands in a
