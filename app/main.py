@@ -155,6 +155,13 @@ def sweep(force: bool = False, dry_run: bool = False) -> dict:
                   reconnect_email_sent=emailed)
             results.append({"email": user["email"], "error": "reauthorization_required"})
             continue
+        except Exception as exc:
+            # Not the person's fault (e.g. the pipeline can't read their
+            # stored access): never ask them to reconnect, never stop the
+            # other inboxes, retry on the next sweep.
+            event("sweep.inbox_failed", "ERROR", inbox=user["email"], error=repr(exc)[:300])
+            results.append({"email": user["email"], "error": "sweep failed; retried on the next sweep"})
+            continue
         try:
             results.append(
                 ingestion.run_sweep_for_user(

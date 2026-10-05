@@ -33,6 +33,7 @@ from google.cloud import bigquery, secretmanager
 from google.oauth2 import id_token as google_id_token
 
 from .. import billing
+from ..logs import event
 
 GMAIL_SCOPES = [
     "openid",
@@ -155,40 +156,39 @@ def _store_refresh_token(secret_id: str, refresh_token: str) -> None:
     client = secretmanager.SecretManagerServiceClient()
     parent = f"projects/{PROJECT}"
     secret_path = f"{parent}/secrets/{secret_id}"
-    is_new = False
     try:
         client.get_secret(name=secret_path)
     except Exception:
         client.create_secret(
             parent=parent, secret_id=secret_id, secret={"replication": {"automatic": {}}}
         )
-        is_new = True
     client.add_secret_version(parent=secret_path, payload={"data": refresh_token.encode()})
+    _grant_pipeline_access(client, secret_path)
 
-    if is_new:
-        # A freshly created secret has no IAM bindings at all — not even
-        # for the identity that just created it. Grant read access to
-        # whichever identity is running right now, since in this
-        # deployment both Cloud Run services (this one, and the private
-        # one that later reads this secret via gmail_client.py) run as
-        # the same service account. Missing this silently broke every
-        # first sweep after onboarding — see developer-docs/logs/ for the incident.
-        # google.auth.default()'s credentials object doesn't reliably expose
-        # the running service account's actual email — ask the metadata
-        # server directly, the standard way to get it on Cloud Run/GCE.
-        resp = requests.get(
-            "http://metadata.google.internal/computeMetadata/v1/instance/"
-            "service-accounts/default/email",
-            headers={"Metadata-Flavor": "Google"},
-            timeout=5,
-        )
-        principal = resp.text.strip()
+
+def _grant_pipeline_access(client, secret_path: str) -> None:
+    """Let the pipeline (same service account as this service) read the secret.
+
+    Normally unnecessary: the project grants that account read access to every
+    gmail-* secret (docs/operations/access-and-credentials.md). Tried on every
+    connection, so reconnecting repairs a secret whose grant was missed. Never
+    fails the connection: the person's access is already stored.
+    """
+    try:
+        # google.auth.default() doesn't reliably expose the running service
+        # account's email on Cloud Run; the metadata server does.
+        principal = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
+            headers={"Metadata-Flavor": "Google"}, timeout=5,
+        ).text.strip()
+        member = f"serviceAccount:{principal}"
         policy = client.get_iam_policy(request={"resource": secret_path})
-        policy.bindings.add(
-            role="roles/secretmanager.secretAccessor",
-            members=[f"serviceAccount:{principal}"],
-        )
+        if any(b.role == "roles/secretmanager.secretAccessor" and member in b.members for b in policy.bindings):
+            return
+        policy.bindings.add(role="roles/secretmanager.secretAccessor", members=[member])
         client.set_iam_policy(request={"resource": secret_path, "policy": policy})
+    except Exception as exc:  # noqa: BLE001 - logged; the project-level grant covers it
+        event("inbox.access_grant_skipped", "WARNING", secret=secret_path.rsplit("/", 1)[-1], error=repr(exc)[:200])
 
 
 def _upsert_user(email: str, secret_id: str) -> None:

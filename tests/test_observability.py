@@ -81,3 +81,19 @@ def test_any_other_failure_is_retried_without_disconnecting_the_inbox(main):
     mark.assert_not_called()
     prompt.assert_not_called()
     assert "retried" in result["results"][0]["error"]
+
+
+def test_an_inbox_whose_access_cannot_be_read_does_not_stop_the_others(main):
+    users = [{"email": "new@htdigital.in", "gmail_secret": "s1"}, {"email": "a@hindustantimes.com", "gmail_secret": "s2"}]
+    def service(secret):
+        if secret == "s1":
+            raise PermissionError("secretmanager.versions.access denied")
+        return MagicMock()
+    with patch.object(main, "active_users", return_value=users), \
+         patch.object(main, "get_service_for_user", side_effect=service), \
+         patch.object(main.ingestion, "run_sweep_for_user", return_value={"email": "a@hindustantimes.com"}) as swept, \
+         patch.object(main, "mark_reauthorization_required") as mark:
+        result = main.sweep()
+    mark.assert_not_called()
+    swept.assert_called_once()
+    assert "retried" in result["results"][0]["error"] and result["results"][1] == {"email": "a@hindustantimes.com"}

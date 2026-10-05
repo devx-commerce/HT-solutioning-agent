@@ -39,6 +39,19 @@ Each person connects their own inbox through the onboarding page
 Their access is stored in a secret named `gmail-<16 characters>`, and they
 appear in the BigQuery table `solutioning_agent.users`.
 
+The pipeline must be able to read every one of those secrets. Grant that once
+per project, for all `gmail-` secrets present and future:
+
+```bash
+gcloud projects add-iam-policy-binding academic-diode-477405-m3 \
+  --member=serviceAccount:296974829876-compute@developer.gserviceaccount.com \
+  --role=roles/secretmanager.secretAccessor \
+  --condition='expression=resource.name.startsWith("projects/296974829876/secrets/gmail-"),title=solutioning-agent-inboxes'
+```
+
+Without it, a newly connected inbox is never read, and the pipeline's logs
+show `sweep.inbox_failed` for it every check.
+
 - **Who may connect:** accounts on `settings.onboarding_domains`.
 - **Access doesn't expire on a timer.** It stops only if the person revokes it,
   or IT removes it. The next inbox check then marks them
