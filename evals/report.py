@@ -86,7 +86,7 @@ def _store(files: list[Path], summary: str, stamp: str) -> str:
     for f in files:
         b.blob(f"{stamp}/{f.name}").upload_from_filename(str(f))
     b.blob(f"{stamp}/summary.txt").upload_from_string(summary)
-    return f"gs://{bucket}/{stamp}/"
+    return f"https://console.cloud.google.com/storage/browser/{bucket}/{stamp}"
 
 
 def usage_report() -> list[tuple[str, list[str], list[tuple]]]:
