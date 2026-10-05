@@ -18,6 +18,8 @@ bundles only this directory — see oauth_creds.py for the same constraint.
 from __future__ import annotations
 
 import asyncio
+import base64
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -247,6 +249,8 @@ def _save_brief(brief_id: str, **fields) -> None:
     A streamed row sits in BigQuery's buffer for up to ~90 minutes and
     rejects UPDATE the whole time, which would break the very next revision.
     """
+    if fields.get("deck_json"):
+        fields["deck_json"] = _save_images_to_storage(fields["deck_json"])
     now = datetime.now(timezone.utc).isoformat()
     sets = ", ".join(f"{k} = @{k}" for k in fields)
     cols = ", ".join(["brief_id", *fields, "created_at", "updated_at"])
@@ -683,7 +687,77 @@ def add_why_ht_slides(brief_id: str, variants: str) -> dict:
 
 
 # Past this the stored deck risks BigQuery's 10 MB request limit on save.
+# Pictures are kept in Cloud Storage (below), so only a deck saved without a
+# bucket configured, or with an extraordinary amount of text, comes near it.
 _MAX_STORED_DECK_CHARS = 8_000_000
+
+# Pictures live in Cloud Storage, not inside the deck saved in BigQuery: each
+# is ~370 KB, and a long deck's pictures would pass BigQuery's request limit.
+# The saved deck holds a gs:// reference; every tool works on the deck with
+# the pictures put back, so nothing else changes. Decks saved before this
+# keep their pictures inline and load as they always did.
+DECK_IMAGES_BUCKET = os.environ.get("DECK_IMAGES_BUCKET", "")
+_DATA_URI = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.S)
+
+
+def _map_strings(value, fn):
+    if isinstance(value, str):
+        return fn(value)
+    if isinstance(value, dict):
+        return {k: _map_strings(v, fn) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_map_strings(v, fn) for v in value]
+    return value
+
+
+def _save_images_to_storage(deck_json: str) -> str:
+    """The deck as saved: each embedded picture replaced by its gs:// object.
+
+    Objects are named by content, so a picture already stored (the same one
+    on a later revision) is not uploaded again.
+    """
+    if not DECK_IMAGES_BUCKET or "data:image/" not in deck_json:
+        return deck_json
+    from google.cloud import storage
+
+    bucket = storage.Client(project=PROJECT).bucket(DECK_IMAGES_BUCKET)
+    deck = json.loads(deck_json)
+    pictures: set[str] = set()
+    _map_strings(deck, lambda v: pictures.add(v) if _DATA_URI.match(v) else None)
+
+    def upload(value: str) -> tuple[str, str]:
+        mime, b64 = _DATA_URI.match(value).groups()
+        name = f"{DATASET}/images/{hashlib.sha256(value.encode('utf-8')).hexdigest()}.{mime.split('/')[1].split('+')[0]}"
+        blob = bucket.blob(name)
+        if not blob.exists():
+            blob.upload_from_string(base64.b64decode(b64), content_type=mime)
+        return value, f"gs://{DECK_IMAGES_BUCKET}/{name}"
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        stored = dict(pool.map(upload, pictures))
+    return json.dumps(_map_strings(deck, lambda v: stored.get(v, v)))
+
+
+def _load_stored_images(deck_json: str) -> str:
+    """The saved deck with its gs:// pictures embedded again."""
+    prefix = f"gs://{DECK_IMAGES_BUCKET}/"
+    if not DECK_IMAGES_BUCKET or prefix not in deck_json:
+        return deck_json
+    from google.cloud import storage
+
+    bucket = storage.Client(project=PROJECT).bucket(DECK_IMAGES_BUCKET)
+    deck = json.loads(deck_json)
+    refs: set[str] = set()
+    _map_strings(deck, lambda v: refs.add(v) if v.startswith(prefix) else None)
+
+    def fetch(ref: str) -> tuple[str, str]:
+        blob = bucket.blob(ref[len(prefix):])
+        data = blob.download_as_bytes()
+        return ref, f"data:{blob.content_type or 'image/jpeg'};base64,{base64.b64encode(data).decode('ascii')}"
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        embedded = dict(pool.map(fetch, refs))
+    return json.dumps(_map_strings(deck, lambda v: embedded.get(v, v)))
 
 
 def _republish(brief_id: str, stored: dict, deck: dict, new_pictures_on=()) -> dict:
@@ -709,7 +783,7 @@ def _republish(brief_id: str, stored: dict, deck: dict, new_pictures_on=()) -> d
         except Exception:  # noqa: BLE001 - never a reason not to publish
             visuals.log.exception("visuals.failed")
     updated_json = json.dumps(deck)
-    if len(updated_json) > _MAX_STORED_DECK_CHARS:
+    if len(_save_images_to_storage(updated_json)) > _MAX_STORED_DECK_CHARS:
         return {"error": "The deck would be too large to store with this many "
                 "images; the deck is unchanged. Remove or replace an image first."}
     try:
@@ -743,7 +817,12 @@ def _load_brief(brief_id: str) -> dict | None:
             ),
         ).result()
     )
-    return dict(rows[0]) if rows else None
+    if not rows:
+        return None
+    row = dict(rows[0])
+    if row.get("deck_json"):
+        row["deck_json"] = _load_stored_images(row["deck_json"])
+    return row
 
 
 def _readable(value):

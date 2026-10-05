@@ -78,7 +78,7 @@ def problems(cfg: dict) -> list[str]:
     need(evals, "smoke_cases", lambda v: isinstance(v, list) and v, "evals.smoke_cases must list at least one case")
 
     for key in ("project_id", "project_number", "region", "model_location", "image_location", "bigquery_dataset",
-                "eval_dataset", "eval_deck_folder_id", "eval_results_bucket", "agent_engine_id",
+                "eval_dataset", "eval_deck_folder_id", "eval_results_bucket", "deck_images_bucket", "agent_engine_id",
                 "past_decks_engine", "past_decks_location", "pubsub_topic", "scheduler_job"):
         need(i, key, lambda v: bool(str(v).strip()), "is required")
     need(i, "gemini_enterprise_agent_url",
@@ -130,6 +130,7 @@ def agent_env(cfg: dict, youtube_key: str) -> dict[str, str]:
         "PAST_DECKS_LOCATION": i["past_decks_location"],
         "HT_ASSETS_FOLDER_ID": s["ht_assets_folder_id"],
         "COMPETITOR_OUTLETS": json.dumps(s["competitor_outlets"], ensure_ascii=False),
+        "DECK_IMAGES_BUCKET": i["deck_images_bucket"],
         "MAX_SLIDES": str(s["max_slides"]),
         "MIN_IMAGES": str(s["min_images"]),
         "YOUTUBE_API_KEY": youtube_key,
@@ -186,6 +187,7 @@ def deploy_env(cfg: dict) -> dict[str, str]:
         "EVAL_DATASET": i["eval_dataset"],
         "EVAL_DECK_FOLDER_ID": i["eval_deck_folder_id"],
         "EVAL_RESULTS_BUCKET": i["eval_results_bucket"],
+        "DECK_IMAGES_BUCKET": i["deck_images_bucket"],
         "AGENT_ENGINE_ID": i["agent_engine_id"],
         "PIPELINE_SERVICE": i["services"]["pipeline"],
         "ONBOARDING_SERVICE": i["services"]["onboarding"],

@@ -298,3 +298,44 @@ def test_deploys_never_ship_eval_results_but_keep_the_env_file():
     ignored = ignore("agents/solutioning_agent", [".adk", ".env", "agent.py", "tools"])
     assert ".adk" in ignored
     assert ".env" not in ignored and "agent.py" not in ignored and "tools" not in ignored
+
+
+class _FakeBucket:
+    """Cloud Storage stand-in: name -> (bytes, content type)."""
+
+    def __init__(self):
+        self.objects, self.uploads = {}, 0
+
+    def blob(self, name):
+        bucket = self
+        blob = MagicMock()
+        blob.exists.side_effect = lambda: name in bucket.objects
+        def upload(data, content_type):
+            bucket.objects[name] = (data, content_type); bucket.uploads += 1
+        blob.upload_from_string.side_effect = upload
+        blob.download_as_bytes.side_effect = lambda: bucket.objects[name][0]
+        type(blob).content_type = property(lambda self: bucket.objects[name][1])
+        return blob
+
+
+def test_pictures_are_saved_outside_the_deck_and_come_back_unchanged(monkeypatch):
+    import base64 as b64
+    pic = "data:image/jpeg;base64," + b64.b64encode(b"\xff\xd8 a picture").decode()
+    deck = {"type": "deck", "slides": [{"layout": "two-column", "image": pic, "heading": "x"},
+                                       {"layout": "image-hero", "image": pic}]}
+    bucket = _FakeBucket()
+    monkeypatch.setattr(deck_tools, "DECK_IMAGES_BUCKET", "decks")
+    with patch("google.cloud.storage.Client") as client:
+        client.return_value.bucket.return_value = bucket
+        stored = deck_tools._save_images_to_storage(json.dumps(deck))
+        assert "data:image" not in stored and stored.count("gs://decks/") == 2
+        assert bucket.uploads == 1  # the same picture twice is stored once
+        assert json.loads(deck_tools._load_stored_images(stored)) == deck
+        deck_tools._save_images_to_storage(json.dumps(deck))
+        assert bucket.uploads == 1  # and never uploaded again
+
+
+def test_a_deck_saved_before_pictures_moved_out_loads_as_it_always_did(monkeypatch):
+    monkeypatch.setattr(deck_tools, "DECK_IMAGES_BUCKET", "decks")
+    inline = json.dumps({"slides": [{"image": "data:image/png;base64,AAAA"}]})
+    assert deck_tools._load_stored_images(inline) == inline

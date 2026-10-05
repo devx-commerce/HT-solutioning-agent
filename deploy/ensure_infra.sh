@@ -81,6 +81,17 @@ if ! gcloud storage buckets describe "gs://$EVAL_RESULTS_BUCKET" $P >/dev/null 2
   say "created bucket $EVAL_RESULTS_BUCKET"
 fi
 
+# --- where deck pictures are kept (the agent reads and writes them) ---
+if ! gcloud storage buckets describe "gs://$DECK_IMAGES_BUCKET" $P >/dev/null 2>&1; then
+  gcloud storage buckets create "gs://$DECK_IMAGES_BUCKET" $P --location=US \
+    --uniform-bucket-level-access >/dev/null
+  gcloud storage buckets update "gs://$DECK_IMAGES_BUCKET" --update-labels="$LABEL" >/dev/null
+  say "created bucket $DECK_IMAGES_BUCKET"
+fi
+gcloud storage buckets add-iam-policy-binding "gs://$DECK_IMAGES_BUCKET" $P \
+  --member="serviceAccount:service-$PROJECT_NUMBER@gcp-sa-aiplatform-re.iam.gserviceaccount.com" \
+  --role=roles/storage.objectAdmin >/dev/null
+
 # Evals run only when started by hand (Cloud Build > Triggers > Run on
 # solutioning-agent-weekly-evals); nothing schedules them.
 

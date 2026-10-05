@@ -41,6 +41,7 @@ Inventory taken 5 Oct 2026.
 | BigQuery dataset | `solutioning_agent` (US) | `briefs` (every deck, as the deck of record), `decisions` (every email the sweep judged), `ingestion_threads` (every brief from email), `audit_log` (every research call), `users` (connected inboxes), `sweep_state`. |
 | BigQuery dataset | `solutioning_agent_eval` (US) | The same tables, used only by evals. |
 | Cloud Storage | `academic-diode-477405-m3-solutioning-agent-evals` | Eval results and summaries. |
+| Cloud Storage | `academic-diode-477405-m3-solutioning-agent-decks` | The pictures in every deck, one file per picture. The deck saved in BigQuery refers to them, which keeps it small however many pictures a deck has. Created by the deploy. |
 | Google Sheet | Briefs sheet, id in `settings.briefs_sheet_id` | One row per brief from email. |
 
 ## Secrets (Secret Manager)

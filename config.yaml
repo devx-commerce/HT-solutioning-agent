@@ -98,6 +98,7 @@ infrastructure:
   eval_dataset: solutioning_agent_eval
   eval_deck_folder_id: 11THzL-7Z1Cw4PdlFY6Ct4VtMR74amTZd
   eval_results_bucket: academic-diode-477405-m3-solutioning-agent-evals
+  deck_images_bucket: academic-diode-477405-m3-solutioning-agent-decks   # the pictures in every deck
   agent_engine_id: "1985844993356464128"   # updated in place on every deploy
   past_decks_engine: ht-sales-pitch-agent_1789729673554
   # The Solutioning Agent in Gemini Enterprise: the "Refine this deck" button
