@@ -54,7 +54,7 @@ When it finds a brief:
 
 1. It researches and builds the deck. This usually takes 5 to 15 minutes.
 2. It adds the label **deck-generated** to the brief in your inbox.
-3. You receive an email titled **"Solution deck drafted: <client>"** from
+3. You receive an email titled **"Solution deck drafted: [client name]"** from
    sales.agent@hindustantimes.com. It contains:
    - a summary of the brief as the agent understood it;
    - a button to open the deck;
@@ -66,7 +66,7 @@ When it finds a brief:
 
 Apply the label **generate-deck** to the email. The first time, create the
 label in Gmail (Settings > Labels > Create new label, named exactly
-`generate-deck`). The agent picks the email up at its next check, within 30
+`generate-deck`). The agent picks the email up at its next check, within 5
 minutes, and builds a deck even if it had decided the email wasn't a brief,
 or had already built one for that thread.
 
@@ -97,15 +97,32 @@ Figures it found carry their source. It never states prices.
 
 ## Using chat in Gemini Enterprise
 
-Open **https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a**
-and choose the **Solutioning Agent**.
+1. Open **https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a**
+   with your HT account.
+2. In the left sidebar, open **Agents** and choose **Solutioning Agent**.
+3. Check that **Solutioning Agent** is shown at the top of the conversation
+   before you type.
+
+Gemini Enterprise's own assistant answers in a normal chat. It can find decks
+in Drive but can't change them, so if a reply says it can't edit the deck, you
+are talking to the assistant rather than the Solutioning Agent: go back to
+step 2.
+
+Name the deck in your first message of a conversation ("On the Decathlon
+deck, ..."), so the agent knows which one you mean.
+
+**If the page says you're not authorised:** your browser opened it with a
+different Google account. Open the link in a browser profile signed in only
+with your HT account, or in an incognito window signed in with it. If it
+still says so, your HT account has no Gemini Enterprise licence yet; tell the
+UAT coordinator.
 
 Things you can ask, in plain words:
 
 | You want to | Say something like |
 |---|---|
 | Build a deck from a brief | "Build a deck for this brief:" and paste the email |
-| Find a deck | "Find the Tata Sampann deck" (it lists all matches if there are several) |
+| Find a deck | "Find the Decathlon deck" (it lists all matches if there are several) |
 | Change wording | "On the big idea slide, change the heading to 'Every haat is a stage'" |
 | Add, remove or reorder slides | "Delete the market context slide and move the timeline after the big idea" |
 | Add a slide | "Add a slide after the mystery shopper slide about a WhatsApp recipe contest, with a picture" |
