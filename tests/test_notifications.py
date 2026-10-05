@@ -188,11 +188,27 @@ def test_no_recipient_is_an_error_not_a_silent_drop():
 AGENT = "https://vertexaisearch.cloud.google.com/us/home/cid/c1/r/agent/15297440114283783461"
 
 
-def test_the_refinement_deep_link_opens_the_agent_with_the_deck_named(monkeypatch):
+@pytest.fixture
+def ge(monkeypatch):
     monkeypatch.setenv("GE_AGENT_URL", AGENT)
-    link = notifications.refinement_link("Rocksport", "1a10bf78168a2229")
-    assert link.startswith(AGENT + "/session/-?q=")
-    assert urllib.parse.unquote(link.split("?q=", 1)[1]) == "On the Rocksport deck (brief 1a10bf78168a2229), change "
+    monkeypatch.setenv("ALLOWED_ONBOARD_DOMAIN", "hindustantimes.com,htdigital.in")
+    monkeypatch.setenv("AGENT_EMAIL", "sales.agent@hindustantimes.com")
+
+
+def _query(link):
+    return dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(link).query))
+
+
+def test_the_refinement_deep_link_opens_the_agent_with_the_deck_named(ge):
+    link = notifications.refinement_link("Rocksport", "1a10bf78168a2229", "ankita.suden@htdigital.in")
+    assert link.startswith(AGENT + "/session/-?")
+    assert _query(link) == {"authuser": "ankita.suden@htdigital.in",
+                            "q": "On the Rocksport deck (brief 1a10bf78168a2229), change "}
+
+
+def test_someone_outside_ht_gets_a_link_that_opens_as_the_agent_account(ge):
+    link = notifications.refinement_link("Rocksport", "b1", "navya.agarwal@devxlabs.ai")
+    assert _query(link)["authuser"] == "sales.agent@hindustantimes.com"
 
 
 def test_no_agent_url_means_no_refinement_link(monkeypatch):

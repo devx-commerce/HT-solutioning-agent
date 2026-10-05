@@ -362,7 +362,10 @@ def execute_build(payload: dict) -> str:
         evidence=reply,
         retrievals=storage.retrieval_summary(thread_id),
         allowed_urls=storage.retrieved_urls(thread_id),
-        refine_link=notifications.refinement_link(payload["client_name"], thread_id),
+        refine_link=notifications.refinement_link(
+            payload["client_name"], thread_id,
+            payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
+        ),
     )
     sheet.append_row(
         client_name=payload["client_name"],

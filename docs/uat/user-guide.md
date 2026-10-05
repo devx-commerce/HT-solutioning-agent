@@ -59,8 +59,9 @@ When it finds a brief:
    - a summary of the brief as the agent understood it;
    - a button to open the deck;
    - a **Refine this deck with the agent** button: it opens the Solutioning
-     Agent in Gemini Enterprise with the deck already named ("On the
-     Decathlon deck (brief 1a10…), change "). Finish the sentence and send;
+     Agent in Gemini Enterprise, signed in as you, with the deck already
+     named ("On the Decathlon deck (brief 1a10…), change "). Finish the
+     sentence and send;
      see [Using chat](#using-chat-in-gemini-enterprise) for what you can ask;
    - the evidence it found, each point with a link to its source;
    - which sources it checked and which returned nothing;

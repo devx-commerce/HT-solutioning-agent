@@ -86,17 +86,24 @@ def _search_count(r: dict) -> str:
     return f" ({calls} searches)"
 
 
-def refinement_link(client_name: str | None, brief_id: str) -> str | None:
+def refinement_link(client_name: str | None, brief_id: str, recipient: str = "") -> str | None:
     """The deep link to the refinement loop: the Solutioning Agent in Gemini
     Enterprise, opened on a new chat with the deck already named in the
     message box ("On the Sleepwell deck (brief 1a0f…), change "), so the
     person only has to finish the sentence. None if no agent URL is set.
+
+    authuser opens it as the person the email goes to, whatever their
+    browser's default Google account is. Anyone outside HT's domains can't
+    use Gemini Enterprise as themselves, so theirs opens as the agent account.
     """
     base = os.environ.get("GE_AGENT_URL", "").rstrip("/")
     if not base:
         return None
+    ht_domains = {d.strip().lower() for d in os.environ.get("ALLOWED_ONBOARD_DOMAIN", "").split(",") if d.strip()}
+    account = recipient if recipient.rsplit("@", 1)[-1].lower() in ht_domains else os.environ.get("AGENT_EMAIL", "")
     prompt = f"On the {client_name or 'client'} deck (brief {brief_id}), change "
-    return f"{base}/session/-?q={urllib.parse.quote(prompt, safe='')}"
+    user = f"authuser={urllib.parse.quote(account, safe='')}&" if account else ""
+    return f"{base}/session/-?{user}q={urllib.parse.quote(prompt, safe='')}"
 
 
 def send_deck_notification(
