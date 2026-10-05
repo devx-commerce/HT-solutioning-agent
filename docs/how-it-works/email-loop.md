@@ -17,13 +17,24 @@
    already being built, is skipped. A thread that already has a deck is
    skipped too, unless someone applied the `generate-deck` label, which
    always forces a fresh build.
-4. **Is it a brief?** `gemini-2.5-flash-lite` reads the whole thread and
-   decides whether it asks for a proposal, campaign or solution. If so, it
-   extracts the client, a one-paragraph brief, the touchpoints and a category.
-   Calendar invitations are never briefs (they're recognised by their subject,
-   without asking the model), and neither are emails that only ask about rates,
-   costing or pricing. A labelled email skips this decision; only the
-   extraction runs.
+4. **Is it a brief?** `gemini-2.5-flash-lite` judges the new email on its
+   own: its sender and recipients, its text (including any email forwarded
+   in it) and its attachments. It is a brief only if it **asks the inbox
+   owner for a solution** (ideas, a plan, a proposal or a deck), and the ask
+   is in this email. Not briefs:
+   - the owner's own requests to colleagues, and replies that deliver or
+     update them (mocks, a page, a deck someone else made);
+   - asks only for rates, costing, pricing, approvals, scheduling or
+     information;
+   - replies that only follow up on an older ask;
+   - calendar invitations (recognised by their subject, without asking the
+     model).
+
+   If it is a brief, the model then reads the whole thread, with
+   attachments, and extracts the client, a one-paragraph brief, the
+   touchpoints and a category. A labelled email skips the decision; only the
+   extraction runs. The rules are checked against real threads with
+   `python -m evals.check_classifier`.
 5. **The brief is queued** on Pub/Sub. The pipeline builds one brief at a
    time per instance, at most three at once; a brief that fails is retried,
    up to five times.
@@ -49,9 +60,9 @@ minutes, depending on where in the 5-minute cycle it arrived.
   never sends from a team member's inbox.
 - It never moves, deletes or marks email read. The only visible change is the
   `deck-generated` label.
-- It never reads attachments. The brief has to be in the email text. A brief
-  that is only in an attached PDF or Word file gets a deck based on the email
-  text alone.
+- It reads the text of Word, Excel, PowerPoint, PDF, text and CSV
+  attachments (up to about 6,000 characters each), not images. A brief sent
+  only as a scanned image isn't read.
 
 ## The sources section can be trusted
 

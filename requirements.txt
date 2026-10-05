@@ -17,3 +17,5 @@ markdown-it-py
 # it, the deployed container crashes on every startup attempt trying to
 # import opentelemetry.exporter.cloud_trace. Confirmed the hard way.
 opentelemetry-exporter-gcp-trace
+# Text of PDF attachments, so a brief sent as a PDF is read (mail_utils.attachment_texts).
+pypdf

@@ -21,6 +21,8 @@ def test_the_client_name_is_the_brand_alone(raw, clean):
 
 
 def test_the_instructions_rule_out_invitations_and_rate_requests():
-    text = classify._CLASSIFY_INSTRUCTION
-    assert "calendar invitations" in text and "rate cards" in text
-    assert "Never an explanation" in text
+    decide = " ".join(classify._DECIDE_INSTRUCTION.split())
+    assert "calendar invitation" in decide and "rate cards" in decide
+    assert "judge this email alone" in decide
+    assert "answers, delivers or updates a request the owner made" in decide
+    assert "never an explanation" in " ".join(classify._EXTRACT_INSTRUCTION.split())

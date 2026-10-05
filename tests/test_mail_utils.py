@@ -63,3 +63,56 @@ def test_walk_for_plain_text_finds_nested_part():
     }
 
     assert mail_utils._walk_for_plain_text(payload) == body
+
+
+def test_the_owners_emails_and_the_new_email_are_marked_and_quotes_dropped():
+    gmail = MagicMock()
+    first = _fake_gmail_message("Ankita <ankita@htdigital.in>", "Mon", "Please share mocks for YAS.")
+    first["id"] = "m1"
+    reply = _fake_gmail_message("Naresh <naresh@hindustantimes.com>", "Tue",
+                                "PFA the mocks.\n\nOn Mon, Ankita <ankita@htdigital.in> wrote:\n> Please share mocks for YAS.")
+    reply["id"] = "m2"
+    gmail.users().threads().get().execute.return_value = {"messages": [first, reply]}
+    text = mail_utils.fetch_thread_context(gmail, "t1", owner="ankita@htdigital.in", new_message_id="m2")
+    assert "[sent by the inbox owner] From: Ankita" in text
+    assert "[NEW EMAIL] From: Naresh" in text
+    assert text.count("Please share mocks for YAS.") == 1  # the quote is not repeated
+
+
+def _zip(files: dict) -> bytes:
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, content in files.items():
+            z.writestr(name, content)
+    return buf.getvalue()
+
+
+W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+S = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+
+
+def test_word_and_excel_attachments_are_read():
+    docx = _zip({"word/document.xml": f'<w:document {W}><w:body><w:p><w:r><w:t>Print, digital and video ideas for December</w:t></w:r></w:p></w:body></w:document>'})
+    xlsx = _zip({"xl/sharedStrings.xml": f'<sst {S}><si><t>HT City travel feature</t></si><si><t>Digital</t></si></sst>'})
+    assert "Print, digital and video ideas" in mail_utils._document_text("Brief.docx", docx)
+    assert "HT City travel feature Digital" in mail_utils._document_text("Tracker.xlsx", xlsx)
+
+
+def test_a_pdf_attachment_is_read():
+    import io
+    from pypdf import PdfWriter
+    buf = io.BytesIO(); w = PdfWriter(); w.add_blank_page(width=200, height=200); w.write(buf)
+    assert mail_utils._document_text("brief.pdf", buf.getvalue()) == ""  # a blank page reads as empty, without error
+
+
+def test_attachments_are_capped_and_unreadable_files_skipped(monkeypatch):
+    monkeypatch.setattr(mail_utils, "_ATTACHMENT_MAX_CHARS", 10)
+    gmail = MagicMock()
+    gmail.users().threads().get().execute.return_value = {"messages": [{"id": "m1", "payload": {"parts": [
+        {"filename": "brief.txt", "body": {"attachmentId": "a1"}},
+        {"filename": "photo.jpg", "body": {"attachmentId": "a2"}},
+    ]}}]}
+    gmail.users().messages().attachments().get().execute.return_value = {"data": _b64("A long brief that goes on")}
+    found = mail_utils.attachment_texts(gmail, "t1")
+    assert found == [("brief.txt", "A long bri")]

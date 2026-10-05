@@ -159,6 +159,19 @@ _CALENDAR_SUBJECT = re.compile(
     r"cancell?ed event|new event|updated event)( with note)?\s*:", re.IGNORECASE)
 
 
+def _thread_text(gmail, thread_id: str, mailbox: str, message_id: str, only_new: bool = False) -> str:
+    """The thread as the classifier and the agent read it: each email's own
+    text, the owner's emails and the new one marked, then the text of any
+    attachments (a brief is often sent as a document). only_new: the new
+    email and its attachments alone, which is what a brief is decided on."""
+    text = f"Inbox owner: {mailbox}\n\n" if mailbox else ""
+    text += mail_utils.fetch_thread_context(gmail, thread_id, owner=mailbox, new_message_id=message_id,
+                                            only_new=only_new)
+    for filename, content in mail_utils.attachment_texts(gmail, thread_id, message_id if only_new else ""):
+        text += f"\n\n---\n\nAttachment: {filename}\n\n{content}"
+    return text
+
+
 def _thread_lock_reason(existing_thread: dict | None, triggered_by: str) -> str | None:
     """None means proceed, otherwise the reason it's blocked.
 
@@ -206,20 +219,23 @@ def _process_branch_a(
     # Classify against the whole thread so far, not just this one message —
     # the substance (budget, timeline, a scope change) often lands in a
     # later reply, not whichever message happened to trip the filter first.
-    thread_context = mail_utils.fetch_thread_context(gmail, msg.thread_id)
-    result = classify.classify_and_extract(msg.subject, thread_context)
+    # Decided on the new email alone; the whole thread is read only to write
+    # the brief once it is one.
+    decision = classify.decide(msg.subject, _thread_text(gmail, msg.thread_id, mailbox, message_id, only_new=True))
     storage.record_decision(
         message_id,
-        "solution_request" if result.is_solution_request else "not_a_request",
-        result.reason,
-        confidence=result.confidence,
+        "solution_request" if decision.is_solution_request else "not_a_request",
+        decision.reason,
+        confidence=decision.confidence,
     )
 
-    if not result.is_solution_request:
+    if not decision.is_solution_request:
         event("email.not_a_brief", inbox=mailbox, message_id=message_id, sender=msg.sender,
-              subject=msg.subject, reason=result.reason, confidence=result.confidence)
+              subject=msg.subject, reason=decision.reason, confidence=decision.confidence)
         return "rejected"
 
+    thread_context = _thread_text(gmail, msg.thread_id, mailbox, message_id)
+    result = classify.extract_only(msg.subject, thread_context)
     _enqueue(
         gmail_secret, msg, thread_context,
         client_name=result.client_name, brief=result.brief,
@@ -247,7 +263,7 @@ def _process_branch_b(
         event("email.skipped", inbox=mailbox, message_id=message_id, subject=msg.subject, reason=lock_reason)
         return "skipped"
 
-    thread_context = mail_utils.fetch_thread_context(gmail, msg.thread_id)
+    thread_context = _thread_text(gmail, msg.thread_id, mailbox, message_id)
     result = classify.extract_only(msg.subject, thread_context)
 
     if not result.has_content:

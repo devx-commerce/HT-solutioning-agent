@@ -1,0 +1,82 @@
+{
+  "note": "Real threads and whether each should produce a deck, agreed with the solutioning team (Oct 2026). Only ids are stored here: the check reads each thread from the inbox. 'new_id' is the email that was classified at the time ('new' is an index into the thread; default: the latest email not sent by the inbox owner).",
+  "cases": [
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a10bf78168a2229",
+      "expect": false,
+      "what": "Rocksport HTLS: a colleague sends a finished proposal",
+      "new_id": "1a10bf78168a2229"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0ed0d4a6718ec7",
+      "expect": false,
+      "what": "Senco footfall: scheduling a review call",
+      "new_id": "1a10b6b55a564715"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a10c0636e965662",
+      "expect": false,
+      "what": "Senco Gold: '++ looping' colleagues",
+      "new_id": "1a10c2626167322f"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0d3dd73c731947",
+      "expect": true,
+      "new": 0,
+      "what": "YAS: agency brief forwarded to the owner"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "19fd145c3b0cb171",
+      "expect": false,
+      "what": "Rocksport: rates with the pricing cell",
+      "new_id": "1a10bd5fb2648c3e"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0e664563e92a1f",
+      "expect": false,
+      "what": "Malaysia Airlines: costing with the pricing cell",
+      "new_id": "1a10a95cdcb631d2"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0e6e2b20e1a775",
+      "expect": false,
+      "what": "YAS: owner asks creative for print mocks",
+      "new_id": "1a10ac22280b17f0"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0f5fed866e9e1f",
+      "expect": false,
+      "what": "Sleepwell: owner asks product for a topic page",
+      "new_id": "1a10c03d99c6366d"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a0f1bf5778ea0e5",
+      "expect": false,
+      "what": "Liberty: owner asks marketing for IP decks",
+      "new_id": "1a10b29019e8cb5f"
+    },
+    {
+      "inbox": "sales.agent@hindustantimes.com",
+      "thread": "1a10a4873577a16b",
+      "expect": true,
+      "what": "Decathlon back-to-campus brief",
+      "new_id": "1a10a4873577a16b"
+    },
+    {
+      "inbox": "ankita.suden@htdigital.in",
+      "thread": "1a10c0636e965662",
+      "new": 0,
+      "expect": true,
+      "what": "Senco Gold: Fever FM asks the owner to add print and HTDS plans (to confirm)"
+    }
+  ]
+}

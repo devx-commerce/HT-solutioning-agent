@@ -35,30 +35,14 @@ MODEL = os.environ.get("CLASSIFY_MODEL", "gemini-2.5-flash-lite")
 # should be attempted at all is still open — see developer-docs/EMAIL-POLLER-DESIGN.md.
 TOUCHPOINTS = ["Print", "Digital", "Integrated", "Events"]
 
-_CLASSIFY_SCHEMA = types.Schema(
+_DECIDE_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     properties={
-        # Answered first, on its own: a small model applies this test far more
-        # reliably as a field than as a rule buried in the instruction.
-        "only_rates_or_costing": types.Schema(
-            type=types.Type.BOOLEAN,
-            description="True if everything asked in the thread is about rates, rate cards, "
-                        "costing, pricing, feasibility of a format or approvals, with no ask "
-                        "for ideas, a plan or a solution.",
-        ),
         "is_solution_request": types.Schema(type=types.Type.BOOLEAN),
         "reason": types.Schema(type=types.Type.STRING),
         "confidence": types.Schema(type=types.Type.NUMBER),
-        "client_name": types.Schema(type=types.Type.STRING, nullable=True),
-        "brief": types.Schema(type=types.Type.STRING, nullable=True),
-        "touchpoints": types.Schema(
-            type=types.Type.STRING, nullable=True, enum=TOUCHPOINTS
-        ),
-        "category": types.Schema(type=types.Type.STRING, nullable=True),
     },
-    required=["only_rates_or_costing", "is_solution_request", "reason", "confidence"],
-    property_ordering=["only_rates_or_costing", "is_solution_request", "reason", "confidence",
-                       "client_name", "brief", "touchpoints", "category"],
+    required=["is_solution_request", "reason", "confidence"],
 )
 
 _EXTRACT_SCHEMA = types.Schema(
@@ -77,14 +61,10 @@ _EXTRACT_SCHEMA = types.Schema(
 
 
 @dataclass
-class ClassifyResult:
+class Decision:
     is_solution_request: bool
     reason: str
     confidence: float
-    client_name: str | None
-    brief: str | None
-    touchpoints: str | None
-    category: str | None
 
 
 @dataclass
@@ -113,54 +93,51 @@ def _client() -> genai.Client:
     return genai.Client(vertexai=True, project=PROJECT, location=MODEL_LOCATION)
 
 
-_CLASSIFY_INSTRUCTION = f"""
-Decide whether this email is a genuine advertising/sponsorship/partnership
-solutioning request that should produce a first-draft solution deck — as opposed to
-an unrelated email, an internal note, a newsletter, or a reply that doesn't
-itself constitute a new ask.
+_DECIDE_INSTRUCTION = """
+You see one new email that arrived in a person's inbox: the inbox owner,
+who works on HT Media's solutions team. You see its sender and recipients,
+its own text (including any email forwarded inside it) and its attachments,
+but not the rest of its thread: judge this email alone.
 
-These are never requests, even when they name a client or brand:
-- calendar invitations, acceptances and meeting updates;
-- asks only for HT's rates, rate cards, pricing or media costs, with nothing
-  asked about ideas, a plan or a solution; this includes HT's own sales and
-  pricing teams discussing rates or packages between themselves;
-- a thread forwarded with no new ask of its own, where the earlier messages
-  are only about rates, approvals or scheduling.
-
-If it is a request, also extract what the email actually states:
-- client_name: only the client's brand or company name as written, such as
-  "Haleon" or "Sheela Foam (Sleepwell)". Never an explanation of how you
-  worked it out. Null if the email doesn't name one.
-- brief: one or two sentences summarising the ask, in your own words.
-- touchpoints: exactly one of {TOUCHPOINTS}, ONLY if the email unambiguously
-  states the channel. Leave null if it's unclear or unstated — never guess.
-- category: the client's industry/category, ONLY if the email states or
-  makes it unambiguous. Leave null otherwise — never infer from the brand
-  name alone.
-
-Leave any field null rather than invent a value. A null field is a correct
-answer, not a missing one.
+is_solution_request is true only if all three hold:
+- The email asks the inbox owner, as a client, an agency or an HT
+  colleague, for something. Forwarding a client's brief to the owner
+  counts. An email that answers, delivers or updates a request the owner
+  made (mocks, a page, a deck, content ideas) does not.
+- What it asks for is a solution: ideas, a plan, a proposal or a deck for
+  a client. An ask only for rates, rate cards, costing, pricing,
+  feasibility of a format, approvals, scheduling or information does not
+  count. Neither does a calendar invitation.
+- The ask is in this email, not only in an earlier one it replies to.
 """.strip()
 
 _EXTRACT_INSTRUCTION = f"""
-A human has already flagged this email as one that should produce a
-solution deck — you are not deciding whether it's a request, only pulling
-what's extractable from it.
+This email thread has already been judged to ask for a solution deck
+(by the classifier, or by a person labelling it): you are not deciding
+whether it's a request, only pulling what's extractable from it.
 
 Set has_content=false only if the email genuinely has nothing to build a
 deck from (empty, unrelated content accidentally labeled, pure metadata).
 Otherwise has_content=true and extract:
-- client_name: only the client's brand or company name, never an
-  explanation; null if not named.
-- brief: one or two sentences summarising the ask.
-- touchpoints: exactly one of {TOUCHPOINTS}, only if unambiguous, else null.
-- category: only if unambiguous, else null.
+- client_name: only the client's brand or company name as written, such as
+  "Haleon" or "Sheela Foam (Sleepwell)"; never an explanation of how you
+  worked it out; null if not named.
+- brief: one or two sentences summarising the ask, in your own words.
+- touchpoints: exactly one of {TOUCHPOINTS}, only if the thread states the
+  channel unambiguously, else null; never guess.
+- category: the client's industry, only if the thread states it or makes it
+  unambiguous, else null; never infer it from the brand name alone.
 
 Leave any field null rather than invent a value.
 """.strip()
 
 
-def classify_and_extract(subject: str, body: str) -> ClassifyResult:
+def decide(subject: str, new_email: str) -> Decision:
+    """Is this one new email a solution request to the inbox owner?
+
+    Judged on the new email alone: given a long thread, the model attributes
+    an older message's ask to a short new reply ("6 inserts").
+    """
     # Must bind to a variable, not chain _client().models.generate_content()
     # inline — the temporary Client object's refcount can hit zero mid
     # expression once .models is accessed, closing its internal httpx
@@ -170,11 +147,13 @@ def classify_and_extract(subject: str, body: str) -> ClassifyResult:
     client = _client()
     response = client.models.generate_content(
         model=MODEL,
-        contents=f"Subject: {subject}\n\nBody:\n{body}",
+        contents=f"Subject: {subject}\n\n{new_email}",
         config=types.GenerateContentConfig(
-            system_instruction=_CLASSIFY_INSTRUCTION,
+            system_instruction=_DECIDE_INSTRUCTION,
             response_mime_type="application/json",
-            response_schema=_CLASSIFY_SCHEMA,
+            response_schema=_DECIDE_SCHEMA,
+            # The same email gets the same answer every time.
+            temperature=0,
             # No tools are ever passed here, so AFC has nothing to do —
             # disabling it avoids the SDK's own "not recommended" warning.
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
@@ -182,19 +161,11 @@ def classify_and_extract(subject: str, body: str) -> ClassifyResult:
         ),
     )
     data = json.loads(response.text)
-    return ClassifyResult(
-        is_solution_request=data["is_solution_request"] and not data.get("only_rates_or_costing"),
-        reason=("only rates or costing asked: " if data.get("only_rates_or_costing") else "") + data["reason"],
-        confidence=data.get("confidence", 0.0),
-        client_name=clean_client_name(data.get("client_name")),
-        brief=data.get("brief"),
-        touchpoints=data.get("touchpoints"),
-        category=data.get("category"),
-    )
+    return Decision(data["is_solution_request"], data["reason"], data.get("confidence", 0.0))
 
 
 def extract_only(subject: str, body: str) -> ExtractResult:
-    client = _client()  # see classify_and_extract's comment on why this must be bound
+    client = _client()  # see decide's comment on why this must be bound
     response = client.models.generate_content(
         model=MODEL,
         contents=f"Subject: {subject}\n\nBody:\n{body}",

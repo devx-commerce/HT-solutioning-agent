@@ -77,7 +77,7 @@ def test_branch_a_skips_when_thread_already_building(mock_storage, mock_mail_uti
     outcome = ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True)
 
     assert outcome == "skipped"
-    mock_classify.classify_and_extract.assert_not_called()
+    mock_classify.decide.assert_not_called()
     mock_storage.open_thread.assert_not_called()
     mock_pubsub.publish_build_task.assert_not_called()
 
@@ -94,7 +94,7 @@ def test_branch_a_skips_when_thread_already_built(mock_storage, mock_mail_utils,
     outcome = ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True)
 
     assert outcome == "skipped"
-    mock_classify.classify_and_extract.assert_not_called()
+    mock_classify.decide.assert_not_called()
     mock_pubsub.publish_build_task.assert_not_called()
 
 
@@ -131,7 +131,7 @@ def test_branch_a_allowed_when_thread_failed(mock_storage, mock_mail_utils, mock
     mock_mail_utils.fetch_message.return_value = _fake_message(message_id="m2")
     mock_mail_utils.fetch_thread_context.return_value = "full thread text"
     mock_storage.thread_status.return_value = {"status": "failed", "sheet_row_written": False, "brief_id": None}
-    mock_classify.classify_and_extract.return_value = MagicMock(
+    mock_classify.decide.return_value = MagicMock(
         is_solution_request=True, reason="genuine request", confidence=0.9,
         client_name="Acme", brief="brief", touchpoints="Digital", category="Retail",
     )
@@ -144,25 +144,40 @@ def test_branch_a_allowed_when_thread_failed(mock_storage, mock_mail_utils, mock
 
 @patch("app.pipeline.ingestion.mail_utils")
 @patch("app.pipeline.ingestion.storage")
-def test_branch_a_classifies_against_full_thread_not_single_message(mock_storage, mock_mail_utils):
-    """The other half of the 2026-09-25 change: classification must use
-    the whole thread, since the substance often lands in a later reply."""
+def test_branch_a_decides_on_the_new_email_and_writes_the_brief_from_the_thread(mock_storage, mock_mail_utils):
+    """Decided on the new email alone (a long thread gets an old ask pinned on
+    a short reply); the whole thread is read only to write the brief."""
     mock_storage.decision_exists.return_value = False
     mock_storage.thread_status.return_value = None
     mock_mail_utils.fetch_message.return_value = _fake_message()
-    mock_mail_utils.fetch_thread_context.return_value = "SUBSTANCE: budget $50k, launches in June"
+    mock_mail_utils.attachment_texts.return_value = []
+    mock_mail_utils.fetch_thread_context.side_effect = (
+        lambda gmail, tid, owner="", new_message_id="", only_new=False: "NEW ONLY" if only_new else "WHOLE THREAD")
 
     with patch("app.pipeline.ingestion.classify") as mock_classify, \
          patch("app.pipeline.ingestion.pubsub"):
-        mock_classify.classify_and_extract.return_value = MagicMock(
-            is_solution_request=False, reason="not a request", confidence=0.5,
-            client_name=None, brief=None, touchpoints=None, category=None,
-        )
-        ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True)
+        mock_classify.decide.return_value = MagicMock(is_solution_request=True, reason="r", confidence=0.9)
+        mock_classify.extract_only.return_value = MagicMock(client_name="Acme", brief="b", touchpoints=None, category=None)
+        ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True, mailbox="o@htdigital.in")
 
-        called_subject, called_body = mock_classify.classify_and_extract.call_args[0]
-        assert called_body == "SUBSTANCE: budget $50k, launches in June"
-        assert called_body != _fake_message().body
+        assert mock_classify.decide.call_args[0][1].endswith("NEW ONLY")
+        assert mock_classify.extract_only.call_args[0][1].endswith("WHOLE THREAD")
+
+
+@patch("app.pipeline.ingestion.mail_utils")
+@patch("app.pipeline.ingestion.storage")
+def test_a_reply_that_is_not_a_brief_never_reads_the_whole_thread(mock_storage, mock_mail_utils):
+    mock_storage.decision_exists.return_value = False
+    mock_storage.thread_status.return_value = None
+    mock_mail_utils.fetch_message.return_value = _fake_message()
+    mock_mail_utils.attachment_texts.return_value = []
+    mock_mail_utils.fetch_thread_context.return_value = "6 inserts"
+    with patch("app.pipeline.ingestion.classify") as mock_classify, \
+         patch("app.pipeline.ingestion.pubsub") as mock_pubsub:
+        mock_classify.decide.return_value = MagicMock(is_solution_request=False, reason="rate query", confidence=0.9)
+        assert ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True) == "rejected"
+        mock_classify.extract_only.assert_not_called()
+        mock_pubsub.publish_build_task.assert_not_called()
 
 
 # --- the sweep must not read the agent's own notifications back ------------
@@ -238,7 +253,7 @@ def test_a_queued_build_carries_the_inbox_it_came_from(mock_storage, mock_mail_u
     mock_storage.decision_exists.return_value = False
     mock_storage.thread_status.return_value = None
     mock_mail_utils.fetch_message.return_value = _fake_message()
-    mock_classify.classify_and_extract.return_value = MagicMock(
+    mock_classify.decide.return_value = MagicMock(
         is_solution_request=True, client_name="Acme", brief="b", touchpoints="t", category="c", confidence=0.9,
     )
     ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True,
@@ -327,7 +342,7 @@ def test_a_calendar_invitation_is_never_a_brief(mock_storage, mock_mail_utils, m
     mock_mail_utils.fetch_message.return_value = msg
 
     assert ingestion._process_branch_a(MagicMock(), "secret", "m1", force=False, dry_run=True) == "rejected"
-    mock_classify.classify_and_extract.assert_not_called()
+    mock_classify.decide.assert_not_called()
     mock_pubsub.publish_build_task.assert_not_called()
     mock_storage.record_decision.assert_called_once_with("m1", "not_a_request", "calendar invitation", confidence=1.0)
 
