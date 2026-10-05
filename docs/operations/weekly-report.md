@@ -1,7 +1,10 @@
 # Weekly report
 
-The full eval run's email (sent to `settings.eval_summary_email`) includes
-this report for the last 7 days, as one table of key figures.
+Every Monday at 09:00 India time (`settings.usage_report_schedule`), the
+`solutioning-agent-weekly-report` trigger emails this report for the last 7
+days to `settings.eval_summary_email`, as one table of key figures. A full
+eval run's email includes it too. To send it now, click **Run** on that
+trigger in Cloud Build > Triggers.
 
 [`bigquery/weekly_report.sql`](../../bigquery/weekly_report.sql) reports
 what the agent did over a period, from data it already logs. Open the

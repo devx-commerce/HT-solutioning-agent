@@ -85,11 +85,61 @@ Quick view: Billing > Reports, Projects = HT-GoogleAgentSpace, Labels `app` =
 `solutioning-agent`, group by Service or by label `component` / `run`. Needs
 Billing Account Viewer; data lags up to a day.
 
-Standing dashboard: a billing admin turns on Billing > Billing export >
-BigQuery export > Detailed usage cost (into e.g. `billing_export`); then the
-Looker Studio billing template, filtered on `app = solutioning-agent`. Charts
-worth having: cost per day by `component`, live against eval, cost per deck
-(daily live cost over decks built that day from `solutioning_agent.briefs`).
+## Exact costs: the billing export
+
+The proper record, with nothing counted by hand: Google's billing export to
+BigQuery has every charge, SKU by SKU, with the labels above attached.
+
+Turning it on, once: a billing account administrator (Billing Account
+Administrator on HTDS-DirectBilling) opens Billing > Billing export >
+BigQuery export > **Detailed usage cost** > Edit settings, chooses project
+`academic-diode-477405-m3` and a new dataset `billing_export` (US). It fills
+from that day on, a few hours behind; nothing earlier is backfilled. The
+table is `billing_export.gcp_billing_export_resource_v1_0127C2_94642F_791C48`.
+
+This app's cost per day, by component and live or eval, credits included:
+
+```sql
+SELECT
+  DATE(usage_start_time, "Asia/Kolkata") AS day,
+  service.description AS service,
+  (SELECT value FROM UNNEST(labels) WHERE key = "component") AS component,
+  (SELECT value FROM UNNEST(labels) WHERE key = "run") AS run,
+  ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 2) AS inr
+FROM `academic-diode-477405-m3.billing_export.gcp_billing_export_resource_v1_0127C2_94642F_791C48`
+WHERE project.id = "academic-diode-477405-m3"
+  AND EXISTS (SELECT 1 FROM UNNEST(labels) WHERE key = "app" AND value = "solutioning-agent")
+  AND usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
+GROUP BY day, service, component, run
+ORDER BY day DESC, inr DESC;
+```
+
+Live cost per deck built, by day:
+
+```sql
+WITH live AS (
+  SELECT DATE(usage_start_time, "Asia/Kolkata") AS day,
+         SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS inr
+  FROM `academic-diode-477405-m3.billing_export.gcp_billing_export_resource_v1_0127C2_94642F_791C48`
+  WHERE EXISTS (SELECT 1 FROM UNNEST(labels) WHERE key = "app" AND value = "solutioning-agent")
+    AND EXISTS (SELECT 1 FROM UNNEST(labels) WHERE key = "run" AND value = "live")
+  GROUP BY day
+),
+decks AS (
+  SELECT DATE(created_at, "Asia/Kolkata") AS day, COUNT(*) AS decks
+  FROM `academic-diode-477405-m3.solutioning_agent.briefs`
+  WHERE deck_file_id IS NOT NULL
+  GROUP BY day
+)
+SELECT day, decks, ROUND(inr, 2) AS inr, ROUND(SAFE_DIVIDE(inr, decks), 2) AS inr_per_deck
+FROM live JOIN decks USING (day)
+ORDER BY day DESC;
+```
+
+The same table also feeds the Looker Studio billing template (Billing >
+Reports > Visualise in Looker Studio) if a dashboard is wanted; filter it on
+`app = solutioning-agent`. Keep both out of HT's docs and the weekly email,
+which goes to an HT inbox.
 
 ## How these were measured
 

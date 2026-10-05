@@ -60,6 +60,7 @@ def problems(cfg: dict) -> list[str]:
          lambda v: isinstance(v, dict) and all(isinstance(d, list) and d and all(_DOMAIN.match(str(x).lower()) for x in d)
                                               for d in v.values()),
          "must map each publication's name to a list of its domains")
+    need(s, "usage_report_schedule", lambda v: bool(_CRON.match(str(v))), "must be a cron schedule like \"0 9 * * 1\"")
     need(s, "sweep_schedule", lambda v: bool(_CRON.match(str(v))), "must be a cron schedule like \"*/30 * * * *\"")
     need(s, "new_inbox_lookback_hours", lambda v: type(v) is int and 0 <= v <= 168,
          "must be a whole number of hours from 0 to 168")
@@ -192,6 +193,7 @@ def deploy_env(cfg: dict) -> dict[str, str]:
         "STATE_KEY_SECRET": i["secrets"]["state_key"],
         "SECRET_NAMES": " ".join(i["secrets"].values()),
         "EVAL_SUMMARY_EMAIL": s["eval_summary_email"],
+        "USAGE_REPORT_SCHEDULE": s["usage_report_schedule"],
         "EVALS_AFTER_DEPLOY": s["evals"]["after_deploy"],
         "SMOKE_CASES": ",".join(s["evals"]["smoke_cases"]),
     }

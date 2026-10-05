@@ -18,11 +18,12 @@ config.yaml has problems; nothing was deployed:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the eval summary. |
+| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the weekly usage email and the eval summary. |
 | `onboarding_domains` | hindustantimes.com, htdigital.in | Google Workspace domains whose people may connect an inbox. |
 | `deck_reader_domains` | hindustantimes.com, htdigital.in | Domains that can open (read only) the decks the agent creates. Applies to new decks. |
 | `excluded_senders` | HR, IT, payroll and newsletter addresses | Mail from these addresses is never treated as a brief, and never sent to the model. |
 | `competitor_outlets` | Times Group, Jagran, Bhaskar, Amar Ujala, Indian Express, The Hindu, The Tribune | Publications the agent never cites or names. A domain covers its subdomains. |
+| `usage_report_schedule` | `0 9 * * 1` | When the weekly usage email goes out (cron, India time; Mondays 09:00). |
 | `sweep_schedule` | `*/5 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
 | `new_inbox_lookback_hours` | 24 | How far back a newly connected inbox is read on its first check (0 to 168). 0 reads only mail arriving from then on. |
 | `max_slides` | 20 | Longest deck the agent may build (7 to 30). |

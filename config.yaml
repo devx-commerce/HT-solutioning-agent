@@ -73,6 +73,9 @@ settings:
   ht_assets_folder_id: 1SMqLJ-lHAYSDMb2lvZ-kMPJIOS6TbLBN   # holds the HT logo
   briefs_sheet_id: 1q-U5t4d_F0KmWuKJcsccCmgAiqPgs1pUhbo9HIAcbzI
 
+  # When the weekly usage email goes out (cron, India time): Mondays 09:00.
+  usage_report_schedule: "0 9 * * 1"
+
   # Evals run when started by hand (docs/operations/evals.md). Optionally, a
   # short run after every deploy as well.
   evals:

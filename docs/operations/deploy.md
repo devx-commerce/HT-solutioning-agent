@@ -63,6 +63,9 @@ organisation only means repeating these steps.
    - Same service account
    It runs only when someone clicks **Run** on it ([evals.md](evals.md)).
 
+The next deploy then creates the third trigger, `solutioning-agent-weekly-report`,
+and its weekly schedule by itself.
+
 ## First-time setup in a new project
 
 Moving to a different Google Cloud project also needs, before the first

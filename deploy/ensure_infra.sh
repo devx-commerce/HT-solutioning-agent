@@ -84,4 +84,34 @@ fi
 # Evals run only when started by hand (Cloud Build > Triggers > Run on
 # solutioning-agent-weekly-evals); nothing schedules them.
 
+# --- the weekly usage email: its own trigger, run by a scheduler job ---
+# The trigger is made here from the deploy trigger's repository, so it needs
+# no console step; until the deploy trigger exists (docs/operations/deploy.md)
+# this waits.
+REPORT_TRIGGER="solutioning-agent-weekly-report"
+REPO=$(gcloud builds triggers describe solutioning-agent-deploy $P --region="$REGION" \
+  --format='value(repositoryEventConfig.repository)' 2>/dev/null || true)
+if [[ -n "$REPO" ]]; then
+  if ! gcloud builds triggers describe "$REPORT_TRIGGER" $P --region="$REGION" >/dev/null 2>&1; then
+    gcloud builds triggers create manual $P --region="$REGION" --name="$REPORT_TRIGGER" \
+      --repository="$REPO" --branch=prod --build-config=deploy/cloudbuild-report.yaml \
+      --service-account="projects/$PROJECT_ID/serviceAccounts/$RUNTIME_SA" >/dev/null
+    say "created trigger $REPORT_TRIGGER"
+  fi
+  TRIGGER_ID=$(gcloud builds triggers describe "$REPORT_TRIGGER" $P --region="$REGION" --format='value(id)')
+  URI="https://cloudbuild.googleapis.com/v1/projects/$PROJECT_ID/locations/$REGION/triggers/$TRIGGER_ID:run"
+  if gcloud scheduler jobs describe "$REPORT_TRIGGER" $P --location="$REGION" >/dev/null 2>&1; then
+    gcloud scheduler jobs update http "$REPORT_TRIGGER" $P --location="$REGION" \
+      --schedule="$USAGE_REPORT_SCHEDULE" --time-zone="Asia/Kolkata" --uri="$URI" --message-body='{}' >/dev/null
+  else
+    gcloud scheduler jobs create http "$REPORT_TRIGGER" $P --location="$REGION" \
+      --schedule="$USAGE_REPORT_SCHEDULE" --time-zone="Asia/Kolkata" \
+      --uri="$URI" --http-method=POST --message-body='{}' \
+      --oauth-service-account-email="$RUNTIME_SA" >/dev/null
+    say "scheduled $REPORT_TRIGGER ($USAGE_REPORT_SCHEDULE, India time)"
+  fi
+else
+  say "weekly usage email not scheduled yet: create the solutioning-agent-deploy trigger first"
+fi
+
 say "done"

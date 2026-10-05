@@ -1,0 +1,21 @@
+# The weekly usage email: the last 7 days of bigquery/weekly_report.sql, sent
+# to settings.eval_summary_email. No evals. Run by the
+# "solutioning-agent-weekly-report" trigger on settings.usage_report_schedule
+# (its scheduler job is created by the deploy); it can also be run by hand.
+timeout: 900s
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: weekly-usage
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install --quiet --root-user-action=ignore pyyaml python-dotenv google-auth \
+          google-cloud-bigquery google-cloud-secret-manager google-api-python-client
+        python -m deploy.render_config
+        set -a; source deploy/out/deploy.env; set +a
+        python -m evals.report --usage-only

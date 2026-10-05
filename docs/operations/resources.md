@@ -28,6 +28,10 @@ Inventory taken 5 Oct 2026.
 | Pub/Sub topic | `solutioning-agent-build-work` | One message per brief to build. |
 | Pub/Sub topic | `solutioning-agent-build-work-dead` | Briefs that failed to build five times. |
 | Pub/Sub subscription | `solutioning-agent-build-work-sub` | Pushes each brief to the pipeline's `/work`. |
+| Cloud Build trigger | `solutioning-agent-deploy` | Deploys on every push to `prod`. Made once in the console ([deploy.md](deploy.md)). |
+| Cloud Build trigger | `solutioning-agent-weekly-evals` | The full eval run, only when someone clicks Run. Made once in the console. |
+| Cloud Build trigger | `solutioning-agent-weekly-report` | The weekly usage email. Created by the deploy. |
+| Cloud Scheduler | `solutioning-agent-weekly-report` | Runs that trigger on `settings.usage_report_schedule`. Created by the deploy. |
 | Cloud Scheduler | `solutioning-agent-sweep` | Checks connected inboxes on `settings.sweep_schedule`. Pause it in the Cloud Scheduler console to stop reading inboxes; deploys never change that. Scheduler jobs can't carry labels. |
 
 ## Data

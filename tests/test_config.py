@@ -22,6 +22,7 @@ def test_the_shipped_config_is_valid():
     (("settings", "max_slides"), 50, "from 7 to 30"),
     (("settings", "min_images"), "3", "from 0 to 10"),
     (("settings", "sweep_schedule"), "every 30 minutes", "cron schedule"),
+    (("settings", "usage_report_schedule"), "mondays", "cron schedule"),
     (("settings", "new_inbox_lookback_hours"), 2.5, "from 0 to 168"),
     (("settings", "deck_folder_id"), "https://drive.google.com/x", "Drive or Sheets id"),
     (("settings", "competitor_outlets"), {"TOI": "indiatimes.com"}, "list of its domains"),

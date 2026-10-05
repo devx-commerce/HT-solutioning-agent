@@ -2,6 +2,7 @@
 
     python -m evals.report --since <unix time> --label "after deploy"
     python -m evals.report --since <unix time> --label "full run" --with-usage
+    python -m evals.report --usage-only            # the weekly usage email
 
 --with-usage adds the last 7 days' usage report (bigquery/weekly_report.sql) to the
 email as one table of key figures.
@@ -195,8 +196,9 @@ def _html_email(title: str, period: str, evals_line: str, cases, misses, figures
              f'<div style="color:{_MUTED};margin:2px 0 0">{html.escape(period)}</div>']
     if figures:
         parts += [f'<h3 style="{h3}">This week</h3>', _figures_html(figures)]
-    parts += [f'<h3 style="{h3}">Evals</h3>', f'<p style="margin:0 0 4px">{html.escape(evals_line)}</p>',
-              _evals_html(cases, misses)]
+    if evals_line:
+        parts += [f'<h3 style="{h3}">Evals</h3>', f'<p style="margin:0 0 4px">{html.escape(evals_line)}</p>',
+                  _evals_html(cases, misses)]
     if footer:
         parts.append(f'<p style="color:{_MUTED};font-size:12px;margin:20px 0 0">{html.escape(footer)}</p>')
     return "".join(parts) + "</div>"
@@ -226,14 +228,30 @@ def _email(to: str, subject: str, body: str, html_body: str | None = None) -> No
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--since", type=float, required=True)
+    parser.add_argument("--since", type=float, help="eval results written since this unix time")
     parser.add_argument("--label", default="eval run")
     parser.add_argument("--with-usage", action="store_true")
+    parser.add_argument("--usage-only", action="store_true", help="the weekly usage email, no evals")
     args = parser.parse_args()
+    if args.since is None and not args.usage_only:
+        parser.error("--since is required unless --usage-only")
+
+    now = datetime.now(timezone.utc)
+    period = f"{(now - timedelta(days=7)).strftime('%-d %b')} to {now.strftime('%-d %b %Y')}"
+    if args.usage_only:
+        figures, footer = [], ""
+        try:
+            figures = key_figures(usage_report())
+        except Exception as exc:  # noqa: BLE001 - say so in the email rather than send nothing
+            footer = f"The usage report could not be run: {exc}"
+        title = "Solutioning Agent weekly usage"
+        body = "\n\n".join(p for p in [f"{title}, {period}", _figures_text(figures), footer] if p)
+        print(body)
+        _send(title, body, _html_email(title, period, "", [], [], figures, footer))
+        return
 
     files = sorted(f for f in HISTORY.glob("*.json") if f.stat().st_mtime >= args.since) if HISTORY.exists() else []
     summary, passed, total = summarise(files)
-    now = datetime.now(timezone.utc)
     stamp = now.strftime("%Y-%m-%d_%H%M") + "_" + args.label.replace(" ", "-")
     where = _store(files, summary, stamp)
     footer = f"Full results: {where}" if where else ""
@@ -245,19 +263,24 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001 - the eval summary still goes out
             footer = f"The usage report could not be run: {exc}\n{footer}".strip()
     title = "Solutioning Agent report" if args.with_usage else "Solutioning Agent evals"
-    period = (f"{(now - timedelta(days=7)).strftime('%-d %b')} to {now.strftime('%-d %b %Y')}"
-              if args.with_usage else now.strftime("%-d %b %Y"))
+    if not args.with_usage:
+        period = now.strftime("%-d %b %Y")
     body = "\n\n".join(p for p in [f"{title}, {period}", _figures_text(figures),
                                     f"Evals: {evals_line}", summary, footer] if p)
     print(body)
+    cases, misses = _results(files)
+    _send(f"{title}: {passed} of {total} evals passed", body,
+          _html_email(title, period, evals_line, cases, misses, figures, footer))
+
+
+def _send(subject: str, body: str, html_body: str) -> None:
     to = os.environ.get("EVAL_SUMMARY_EMAIL", "")
-    if to:
-        try:
-            cases, misses = _results(files)
-            _email(to, f"{title}: {passed} of {total} evals passed", body,
-                   _html_email(title, period, evals_line, cases, misses, figures, footer))
-        except Exception as exc:  # noqa: BLE001 - a report that can't be emailed is still printed
-            print(f"Could not email the summary: {exc}", file=sys.stderr)
+    if not to:
+        return
+    try:
+        _email(to, subject, body, html_body)
+    except Exception as exc:  # noqa: BLE001 - a report that can't be emailed is still printed
+        print(f"Could not email the summary: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":
