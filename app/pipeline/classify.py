@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from google import genai
 from google.genai import types
 
+from ..billing import labels
+
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 # Separate from LOCATION: Gemini 3.x is served only from `global` here.
@@ -140,6 +142,7 @@ def classify_and_extract(subject: str, body: str) -> ClassifyResult:
             # No tools are ever passed here, so AFC has nothing to do —
             # disabling it avoids the SDK's own "not recommended" warning.
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            labels=labels("classifier"),
         ),
     )
     data = json.loads(response.text)
@@ -164,6 +167,7 @@ def extract_only(subject: str, body: str) -> ExtractResult:
             response_mime_type="application/json",
             response_schema=_EXTRACT_SCHEMA,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            labels=labels("classifier"),
         ),
     )
     data = json.loads(response.text)

@@ -29,9 +29,9 @@ Two testing knobs on the classify-and-enqueue half, both off by default:
 
 from __future__ import annotations
 
-import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 
 from . import agent_client
@@ -43,8 +43,7 @@ from . import prompts
 from . import pubsub
 from . import sheet
 from . import storage
-
-log = logging.getLogger("solutioning_agent.ingestion")
+from ..logs import event
 
 _NOISE_FILTER = "-category:promotions -category:social -in:chats"
 _DRY_RUN_REPLY = "[dry-run] https://docs.google.com/presentation/d/DRY-RUN-NO-DECK-BUILT/edit"
@@ -93,7 +92,7 @@ def run_sweep_for_user(
 ) -> dict:
     """One mailbox, one sweep. Returns a small summary for /sweep's response."""
     now = datetime.now(timezone.utc)
-    cutoff = storage.bootstrap_cutoff() if force else storage.get_sweep_cutoff()
+    cutoff = storage.bootstrap_cutoff() if force else storage.get_sweep_cutoff(email)
 
     branch_a_ids = _list_branch_a(gmail, cutoff)
     branch_b_ids = _list_branch_b(gmail)
@@ -112,10 +111,14 @@ def run_sweep_for_user(
         )
         queued, rejected, skipped = _tally(outcome, queued, rejected, skipped)
 
+    if branch_a_ids or branch_b_ids:
+        event("sweep.found", inbox=email, new_emails=len(branch_a_ids), labelled=len(branch_b_ids),
+              queued=queued, not_briefs=rejected, skipped=skipped, dry_run=dry_run or None)
+
     if not force:
         # A test sweep must never move the real watermark — the next
         # genuine sweep still needs to cover whatever force skipped past.
-        storage.set_sweep_watermark(now)
+        storage.set_sweep_watermark(email, now)
 
     return {
         "email": email,
@@ -184,6 +187,7 @@ def _process_branch_a(
     if lock_reason is not None:
         if not force:
             storage.record_decision(message_id, "thread_already_active", lock_reason)
+        event("email.skipped", inbox=mailbox, message_id=message_id, subject=msg.subject, reason=lock_reason)
         return "skipped"
 
     # Classify against the whole thread so far, not just this one message —
@@ -199,6 +203,8 @@ def _process_branch_a(
     )
 
     if not result.is_solution_request:
+        event("email.not_a_brief", inbox=mailbox, message_id=message_id, sender=msg.sender,
+              subject=msg.subject, reason=result.reason, confidence=result.confidence)
         return "rejected"
 
     _enqueue(
@@ -225,6 +231,7 @@ def _process_branch_b(
     if lock_reason is not None:
         if not force:
             storage.record_decision(message_id, "thread_already_active", lock_reason)
+        event("email.skipped", inbox=mailbox, message_id=message_id, subject=msg.subject, reason=lock_reason)
         return "skipped"
 
     thread_context = mail_utils.fetch_thread_context(gmail, msg.thread_id)
@@ -235,6 +242,7 @@ def _process_branch_b(
             message_id, "manual_flag_insufficient",
             "labeled generate-deck but no usable content found",
         )
+        event("email.label_without_brief", "WARNING", inbox=mailbox, message_id=message_id, subject=msg.subject)
         return "rejected"
 
     storage.record_decision(
@@ -273,6 +281,9 @@ def _enqueue(
         # Whose inbox the brief came from: the "deck drafted" email goes there.
         mailbox=mailbox,
     )
+    event("brief.queued", inbox=mailbox, thread_id=msg.thread_id, client=client_name, sender=msg.sender,
+          subject=msg.subject, picked_up="automatically" if triggered_by == "branch_a" else "generate-deck label",
+          dry_run=dry_run or None)
 
 
 def _deck_link(reply: str) -> str | None:
@@ -295,7 +306,10 @@ def execute_build(payload: dict) -> str:
     # still observes 'built'/'failed' here.
     existing = storage.thread_status(thread_id)
     if existing is not None and existing["status"] in ("built", "failed"):
+        event("build.duplicate_ignored", thread_id=thread_id, status=existing["status"])
         return existing["status"]
+    started = time.time()
+    event("build.started", thread_id=thread_id, client=payload.get("client_name"), inbox=payload.get("mailbox"))
 
     gmail = get_service_for_user(payload["gmail_secret"])
     message_id = payload["message_id"]
@@ -316,10 +330,8 @@ def execute_build(payload: dict) -> str:
             session_user_id=f"ingestion-{thread_id}",
         )
         if "docs.google.com/presentation" not in reply:
-            log.warning(
-                "ingestion.build_failed",
-                extra={"thread_id": thread_id, "message_id": message_id},
-            )
+            event("build.failed", "ERROR", thread_id=thread_id, client=payload.get("client_name"),
+                  agent_reply=reply[:300])
             storage.mark_thread_failed(thread_id, reply[:500])
             return "failed"
 
@@ -343,4 +355,8 @@ def execute_build(payload: dict) -> str:
     )
     storage.mark_thread_sheet_written(thread_id)
     storage.mark_thread_built(thread_id, brief_id=thread_id)
+    event("build.done", thread_id=thread_id, client=payload["client_name"], deck=_deck_link(reply),
+          notified=payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
+          build_minutes=round((time.time() - started) / 60, 1),
+          minutes_since_email=round((datetime.now(timezone.utc) - received_at).total_seconds() / 60, 1))
     return "built"

@@ -35,7 +35,7 @@ from google.cloud import bigquery
 from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
-from . import source_policy
+from . import billing, source_policy
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -69,7 +69,7 @@ def _log_retrieval(
 ) -> None:
     """One row per source per brief. Never raises — telemetry must not break research."""
     try:
-        client = bigquery.Client(project=PROJECT)
+        client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
         client.insert_rows_json(
             f"{PROJECT}.{DATASET}.audit_log",
             [
@@ -175,6 +175,7 @@ def search_web(query: str, brief_id: str) -> dict:
             automatic_function_calling=types.AutomaticFunctionCallingConfig(
                 disable=True
             ),
+            labels=billing.labels("research"),
         )
         # One retry when an answer comes back with nothing grounded: the
         # model skipped searching, and a second ask usually searches.

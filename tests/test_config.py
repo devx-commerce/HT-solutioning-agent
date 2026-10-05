@@ -22,6 +22,7 @@ def test_the_shipped_config_is_valid():
     (("settings", "max_slides"), 50, "from 7 to 30"),
     (("settings", "min_images"), "3", "from 0 to 10"),
     (("settings", "sweep_schedule"), "every 30 minutes", "cron schedule"),
+    (("settings", "new_inbox_lookback_hours"), 2.5, "from 0 to 168"),
     (("settings", "deck_folder_id"), "https://drive.google.com/x", "Drive or Sheets id"),
     (("settings", "competitor_outlets"), {"TOI": "indiatimes.com"}, "list of its domains"),
     (("infrastructure", "agent_engine_id"), "", "agent_engine_id: is required"),
@@ -59,3 +60,5 @@ def test_the_defaults_in_code_match_the_shipped_config():
     assert list(ingestion._DEFAULT_EXCLUDED_SENDERS) == s["excluded_senders"]
     assert {k: list(v) for k, v in source_policy._DEFAULT_OUTLETS.items()} == s["competitor_outlets"]
     assert (master_deck.MAX_SLIDES, master_deck.MIN_IMAGES) == (s["max_slides"], s["min_images"])
+    from app.pipeline import storage
+    assert storage.BOOTSTRAP_LOOKBACK.total_seconds() == s["new_inbox_lookback_hours"] * 3600

@@ -15,15 +15,17 @@ from datetime import datetime, timedelta, timezone
 
 from google.cloud import bigquery
 
+from .. import billing
+
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
 
-BOOTSTRAP_LOOKBACK = timedelta(hours=24)
+BOOTSTRAP_LOOKBACK = timedelta(hours=int(os.environ.get("NEW_INBOX_LOOKBACK_HOURS", "24")))
 WATERMARK_OVERLAP = timedelta(minutes=5)
 
 
 def _client() -> bigquery.Client:
-    return bigquery.Client(project=PROJECT)
+    return bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
 
 
 # --- watermark --------------------------------------------------------------
@@ -36,33 +38,38 @@ def bootstrap_cutoff() -> datetime:
     return datetime.now(timezone.utc) - BOOTSTRAP_LOOKBACK
 
 
-def get_sweep_cutoff() -> datetime:
-    """The Branch A `after:` cutoff — last successful sweep, minus overlap,
-    or a 24h bootstrap default on the very first run."""
+def get_sweep_cutoff(inbox: str) -> datetime:
+    """The Branch A `after:` cutoff for one inbox: its last successful sweep,
+    minus overlap, or settings.new_inbox_lookback_hours back on its first.
+
+    Each inbox keeps its own time, so one inbox's sweep never moves another's.
+    """
     rows = list(
         _client()
         .query(
             f"SELECT last_swept_at FROM `{PROJECT}.{DATASET}.sweep_state` "
-            f"WHERE id = 'default'"
+            f"WHERE id = @inbox AND last_swept_at IS NOT NULL",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("inbox", "STRING", inbox)]
+            ),
         )
         .result()
     )
-    if not rows or rows[0]["last_swept_at"] is None:
-        return bootstrap_cutoff()
-    return rows[0]["last_swept_at"] - WATERMARK_OVERLAP
+    return rows[0]["last_swept_at"] - WATERMARK_OVERLAP if rows else bootstrap_cutoff()
 
 
-def set_sweep_watermark(swept_at: datetime) -> None:
+def set_sweep_watermark(inbox: str, swept_at: datetime) -> None:
     _client().query(
         f"""
         MERGE `{PROJECT}.{DATASET}.sweep_state` T
-        USING (SELECT 'default' AS id) S ON T.id = S.id
+        USING (SELECT @inbox AS id) S ON T.id = S.id
         WHEN MATCHED THEN UPDATE SET last_swept_at = @swept_at
-        WHEN NOT MATCHED THEN INSERT (id, last_swept_at) VALUES ('default', @swept_at)
+        WHEN NOT MATCHED THEN INSERT (id, last_swept_at) VALUES (@inbox, @swept_at)
         """,
         job_config=bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter("swept_at", "TIMESTAMP", swept_at.isoformat())
+                bigquery.ScalarQueryParameter("inbox", "STRING", inbox),
+                bigquery.ScalarQueryParameter("swept_at", "TIMESTAMP", swept_at.isoformat()),
             ]
         ),
     ).result()

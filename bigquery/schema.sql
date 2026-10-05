@@ -64,11 +64,13 @@ CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.audit_log` (
   recorded_at TIMESTAMP
 );
 
--- Single row, id='default'. The watermark: /sweep's Branch A uses
--- last_swept_at as its `after:` cutoff instead of a fixed rolling window,
--- so a skipped or failed sweep gets caught by the next successful one
--- instead of silently losing whatever arrived during the gap. See
--- developer-docs/EMAIL-POLLER-DESIGN.md.
+-- The watermark, one row per inbox (id = its email address): /sweep's
+-- Branch A uses last_swept_at as its `after:` cutoff instead of a fixed
+-- rolling window, so a skipped or failed sweep gets caught by the next
+-- successful one instead of silently losing whatever arrived during the gap.
+-- An inbox without a row is read back settings.new_inbox_lookback_hours on its
+-- first sweep. The 'default' row is the shared time used before inboxes had
+-- their own, and is no longer read. See developer-docs/EMAIL-POLLER-DESIGN.md.
 CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.sweep_state` (
   id STRING NOT NULL,
   last_swept_at TIMESTAMP

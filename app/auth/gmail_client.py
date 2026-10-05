@@ -17,6 +17,7 @@ from google.cloud import bigquery, secretmanager
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from .. import billing
 from .gmail_oauth import GMAIL_SCOPES
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
@@ -33,7 +34,7 @@ def _client_material() -> dict:
 
 def active_users() -> list[dict]:
     """Every mailbox the background poller should check this run."""
-    client = bigquery.Client(project=PROJECT)
+    client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
     rows = client.query(
         f"SELECT email, gmail_secret FROM `{PROJECT}.{DATASET}.users` "
         f"WHERE status = 'active'"
@@ -54,7 +55,10 @@ def get_service_for_user(gmail_secret: str):
         client_id=material["client_id"],
         client_secret=material["client_secret"],
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=GMAIL_SCOPES,
+        # Only the Gmail scopes: openid/email/profile matter at onboarding, and
+        # Google returns them under other names, which made every refresh log
+        # "Not all requested scopes were granted".
+        scopes=[scope for scope in GMAIL_SCOPES if scope.startswith("https://")],
     )
     creds.refresh(Request())
     return build("gmail", "v1", credentials=creds)
@@ -66,7 +70,7 @@ def mark_reauthorization_required(email: str) -> None:
     Mirrors commercial-context-layer-GE's gmail_ingestion behaviour: a
     refresh failure for one mailbox degrades that one row, not the sweep.
     """
-    client = bigquery.Client(project=PROJECT)
+    client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
     client.query(
         f"UPDATE `{PROJECT}.{DATASET}.users` SET status = 'reauthorization_required' "
         f"WHERE email = @email",

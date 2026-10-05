@@ -30,9 +30,9 @@ gcloud builds submit --config deploy/cloudbuild.yaml \
 | Renderer | Deploys `solutioning-agent-renderer` | The previous renderer keeps running. |
 | Services | Deploys `solutioning-agent` (private) and `solutioning-agent-onboarding` (public, same image) | The previous revision keeps serving. |
 | Agent | Updates the live Agent Engine in place, keeping its id, so Gemini Enterprise and the pipeline need no change | The previous agent keeps running. |
-| Evals | Runs the after-deploy evals and emails the summary | Never fails the deploy. Read the summary email. |
+| Evals | Off by default (`settings.evals.after_deploy`); when on, runs evals and emails the summary | Never fails the deploy. |
 
-A full deploy takes about 20 minutes, plus 15 for smoke evals.
+A full deploy takes about 20 minutes.
 
 ## Undoing a deploy
 

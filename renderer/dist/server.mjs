@@ -30074,7 +30074,9 @@ async function render(deckJson) {
     prefetchImages: false,
     onWarn: (m) => warnings.push(m)
   });
-  if (warnings.length) console.log(JSON.stringify({ severity: "INFO", event: "render.warnings", warnings }));
+  if (warnings.length) {
+    console.log(JSON.stringify({ severity: "INFO", message: `render.warnings count=${warnings.length}`, event: "render.warnings", warnings }));
+  }
   return { status: 200, body: pptx };
 }
 var server = createServer(async (req, res) => {
@@ -30083,16 +30085,20 @@ var server = createServer(async (req, res) => {
   const started = Date.now();
   try {
     const out = await render(await readBody(req));
-    console.log(JSON.stringify({ severity: "INFO", event: "render.done", status: out.status, ms: Date.now() - started }));
+    const ms = Date.now() - started;
+    const event = out.status === 200 ? "render.done" : "render.rejected";
+    const severity = out.status === 200 ? "INFO" : "WARNING";
+    const problems = out.status === 200 ? undefined : out.body.details;
+    console.log(JSON.stringify({ severity, message: `${event} status=${out.status} ms=${ms}`, event, status: out.status, ms, problems }));
     return out.status === 200 ? send(res, 200, out.body, PPTX_MIME) : send(res, out.status, out.body);
   } catch (err) {
     if (err.tooLarge) return send(res, 413, { error: "too_large", message: `Deck body is over ${MAX_BODY} bytes.` });
-    console.error(JSON.stringify({ severity: "ERROR", event: "render.failed", message: String(err?.stack ?? err) }));
+    console.error(JSON.stringify({ severity: "ERROR", message: `render.failed ${String(err?.message ?? err)}`, event: "render.failed", stack: String(err?.stack ?? err) }));
     return send(res, 500, { error: "render_failed", message: String(err?.message ?? err) });
   }
 });
 if (process.env.RENDERER_NO_LISTEN !== "1") {
-  server.listen(PORT, () => console.log(JSON.stringify({ severity: "INFO", event: "renderer.listening", port: PORT })));
+  server.listen(PORT, () => console.log(JSON.stringify({ severity: "INFO", message: `renderer.listening port=${PORT}`, event: "renderer.listening", port: PORT })));
 }
 export {
   server

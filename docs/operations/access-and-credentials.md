@@ -71,7 +71,7 @@ the newest version even when it is disabled. Add a new version instead.
 
 ## The deploy's own access
 
-Deploys and the evals after them run in Cloud Build as the compute service
+Deploys and eval runs both run in Cloud Build as the compute service
 account. Besides reading the secrets above, it signs itself in to the private
 deck renderer during evals, which needs this once per project:
 
@@ -81,7 +81,7 @@ gcloud iam service-accounts add-iam-policy-binding $SA \
   --member=serviceAccount:$SA --role=roles/iam.serviceAccountOpenIdTokenCreator
 ```
 
-Without it the deploy still succeeds, but every after-deploy eval reports
+Without it the deploy still succeeds, but every eval run in Cloud Build reports
 "the rendering service is unavailable" and fails its deck check.
 
 ## Workspace admin settings this depends on

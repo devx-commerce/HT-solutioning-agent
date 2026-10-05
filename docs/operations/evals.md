@@ -9,8 +9,8 @@ sound, and is it built properly?
 
 | Run | What | How long | Where the result goes |
 |---|---|---|---|
-| After every deploy | The smoke cases (`settings.evals.smoke_cases`), once | About 15 minutes | Emailed to `settings.eval_summary_email`; kept in the eval bucket |
-| Weekly | Every case three times, plus the revision chats | About 3 to 4 hours | Same, together with the week's usage report ([weekly-report.md](weekly-report.md)) |
+| Weekly | Every case three times, plus the revision chats | About 3 to 4 hours | Emailed to `settings.eval_summary_email` with the week's usage report ([weekly-report.md](weekly-report.md)); kept in the eval bucket |
+| After a deploy, if turned on | The smoke cases (`settings.evals.smoke_cases`), once | About 15 minutes | Same as weekly. Off by default (`settings.evals.after_deploy: none`) |
 | By hand | Any cases you choose | About 5 minutes a case | Printed, and kept locally |
 
 A failing eval never blocks a deploy. Read the summary, and treat a drop in
@@ -54,6 +54,28 @@ writes the decks, sampled three times per rubric set with a majority vote.
 Each case hides its own HT deck from the past-decks search, so the agent
 can't copy the answer it's scored against. All other past decks stay
 searchable.
+
+## What they cost
+
+Most of the cost is model calls: the agent doing the work, and the judge
+(`gemini-2.5-pro`) scoring it, which is the larger part. Measured on a full
+pass over the nine briefs, at October 2026 list prices:
+
+| Run | Roughly |
+|---|---|
+| One brief case | ₹150 |
+| Smoke run (two cases) | ₹300 |
+| Revision chats (six) | ₹180 |
+| The weekly run (every brief three times, plus the revision chats) | ₹4,100 |
+
+Google Search grounding is free for the first 5,000 searches a month, which
+evals stay well under. Cloud Build time adds about ₹60 a week. In Cloud
+Billing, eval spend carries the label `run=eval` (see
+[cost.md](cost.md)).
+
+To spend less: run each brief once instead of three times (the `3` in
+`deploy/cloudbuild-evals.yaml`, about ₹1,500 a week), or lower
+`num_samples` for the judge in `evals/test_config.json`.
 
 ## Running evals by hand
 

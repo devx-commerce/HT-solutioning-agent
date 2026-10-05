@@ -27,7 +27,7 @@ import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 
-from . import master_deck
+from . import billing, master_deck
 
 log = logging.getLogger("solutioning_agent.visuals")
 
@@ -363,6 +363,7 @@ def generate_image(description: str, ratio: str) -> str | None:
             model=IMAGE_MODEL,
             contents=f"{description}\n\n{_STYLE}",
             config=types.GenerateContentConfig(
+                labels=billing.labels("images"),
                 response_modalities=["IMAGE"],
                 image_config=types.ImageConfig(
                     aspect_ratio=target,

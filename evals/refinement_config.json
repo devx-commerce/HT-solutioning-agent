@@ -4,6 +4,7 @@
       "threshold": 1.0,
       "judge_model_options": {
         "judge_model": "gemini-2.5-pro",
+        "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}},
         "num_samples": 3
       },
       "rubrics": [
@@ -20,6 +21,7 @@
       "threshold": 1.0,
       "judge_model_options": {
         "judge_model": "gemini-2.5-pro",
+        "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}},
         "num_samples": 3
       },
       "rubrics": [

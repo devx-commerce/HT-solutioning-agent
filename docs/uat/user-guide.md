@@ -46,7 +46,9 @@ not a personal one.
 You don't need to do anything differently. Every 5 minutes the agent checks
 for new email in your inbox and decides whether each message is a client
 brief (a request for a proposal, campaign idea or solution). Newsletters,
-internal HR and IT mail, and ordinary conversation are ignored.
+internal HR and IT mail, and ordinary conversation are ignored. Its first
+check after you connect also looks back over the previous 24 hours, so a
+brief that arrived yesterday gets a deck too.
 
 When it finds a brief:
 

@@ -16,8 +16,9 @@ it meets the pilot's acceptance criteria and sign it off.
 
 ## Before day 1
 
-- [ ] Deploy the current version (see [../operations/deploy.md](../operations/deploy.md)) and
-      confirm the after-deploy evals passed.
+- [ ] Deploy the current version (see [../operations/deploy.md](../operations/deploy.md)), and
+      run the weekly evals once by hand (Cloud Build > Triggers > Run on
+      `solutioning-agent-weekly-evals`) to confirm they pass.
 - [ ] Confirm every tester has an HT account on hindustantimes.com or
       htdigital.in, and a Gemini Enterprise licence if they'll use chat.
 - [ ] Resume the inbox check (the `solutioning-agent-sweep` scheduler job;

@@ -2,7 +2,7 @@
   "criteria": {
     "rubric_based_final_response_quality_v1": {
       "threshold": 0.75,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "num_samples": 3},
+      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 3},
       "rubrics": [
         {"rubric_id": "g-custom-specificity", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Every custom solution in the deck (an on-ground activation, contest, event, mystery shopper, campus or school programme, influencer programme or microsite) has a slide of its own giving concrete specifics: where it runs (named cities, districts or venue types, with counts), how it works, its scale, its timing, and how it is proved or reported."}},
         {"rubric_id": "g-assumptions-labelled", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Figures the agent assumed rather than found (counts, cities, durations, reach) are marked as indicative or assumed, and no assumed figure is presented as a researched fact or given a source."}},
@@ -14,7 +14,7 @@
     },
     "rubric_based_tool_use_quality_v1": {
       "threshold": 0.75,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "num_samples": 3},
+      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 3},
       "rubrics": [
         {"rubric_id": "t-past-decks-angles", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "Before building the deck, the agent searched HT's past decks from at least three different angles (for example the client, the category, the objective, the audience or a format)."}},
         {"rubric_id": "t-client-and-competitors", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "Before building the deck, the agent researched the client's recent campaigns or news and at least one named competitor."}},
@@ -25,7 +25,7 @@
     },
     "hallucinations_v1": {
       "threshold": 0.8,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "num_samples": 1},
+      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 1},
       "evaluate_intermediate_nl_responses": false
     },
     "deck_quality_gate": 1.0,

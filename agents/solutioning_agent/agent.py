@@ -25,7 +25,7 @@ from google.genai import Client, types
 # the research source config, none of which exist otherwise.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-from .tools import master_deck, source_policy, why_ht
+from .tools import billing, master_deck, source_policy, why_ht
 from .tools.deck import (
     add_why_ht_slides,
     build_solution_deck,
@@ -109,6 +109,7 @@ root_agent = LlmAgent(
         model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
         retry_options=_MODEL_RETRY,
     ),
+    generate_content_config=types.GenerateContentConfig(labels=billing.labels("agent")),
     instruction="""
 You research inbound advertising requests and draft first-draft solution
 decks for HT Media's solutioning team.

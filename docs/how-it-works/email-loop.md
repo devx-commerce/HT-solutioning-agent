@@ -4,8 +4,9 @@
 
 1. **Every 5 minutes** (`settings.sweep_schedule`), Cloud Scheduler calls the
    pipeline's `/sweep`.
-2. **For each connected inbox**, the pipeline lists email received since the
-   last check, leaving out:
+2. **For each connected inbox**, the pipeline lists email received since
+   that inbox's last check (on its first check after connecting, the last
+   `settings.new_inbox_lookback_hours`, 24 by default), leaving out:
    - promotions, social and chat messages;
    - the agent's own emails (sales.agent@hindustantimes.com) and the inbox
      owner's own sent mail;

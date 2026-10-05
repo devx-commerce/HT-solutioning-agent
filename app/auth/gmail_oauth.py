@@ -32,6 +32,8 @@ from google.auth.transport import requests as google_requests
 from google.cloud import bigquery, secretmanager
 from google.oauth2 import id_token as google_id_token
 
+from .. import billing
+
 GMAIL_SCOPES = [
     "openid",
     "email",
@@ -190,7 +192,7 @@ def _store_refresh_token(secret_id: str, refresh_token: str) -> None:
 
 
 def _upsert_user(email: str, secret_id: str) -> None:
-    client = bigquery.Client(project=PROJECT)
+    client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
     now = datetime.now(timezone.utc).isoformat()
     secret_ref = f"projects/{PROJECT}/secrets/{secret_id}/versions/latest"
     client.query(

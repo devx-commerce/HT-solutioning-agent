@@ -33,20 +33,21 @@ from __future__ import annotations
 
 import base64
 import json
-import logging
 import os
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, RedirectResponse
+from google.auth.exceptions import RefreshError
 from google.cloud import bigquery
 
+from . import billing
+from .logs import event
 from .auth import gmail_oauth
 from .auth.gmail_client import active_users, get_service_for_user, mark_reauthorization_required
 from .pipeline import agent_client, ingestion, mail_utils
 from .pipeline.notifications import send_reauth_prompt
 
 app = FastAPI()
-log = logging.getLogger("solutioning_agent")
 
 PROJECT = os.environ["GOOGLE_CLOUD_PROJECT"]
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -65,6 +66,7 @@ def healthz() -> dict:
 def oauth_start() -> RedirectResponse:
     """Visit this URL to onboard your own mailbox. No script, no admin grant."""
     redirect_uri = f"{_self_url()}/oauth/gmail/callback"
+    event("inbox.connect_started")
     return RedirectResponse(gmail_oauth.build_auth_url(redirect_uri))
 
 
@@ -72,7 +74,9 @@ def oauth_callback(code: str, state: str) -> HTMLResponse:
     try:
         result = gmail_oauth.handle_callback(code, state)
     except ValueError as exc:
+        event("inbox.connect_failed", "WARNING", reason=str(exc))
         return HTMLResponse(f"<p>Onboarding failed: {exc}</p>", status_code=400)
+    event("inbox.connected", inbox=result["email"])
     return HTMLResponse(f"<p>Onboarded {result['email']}. You can close this tab.</p>")
 
 
@@ -94,7 +98,7 @@ def status() -> dict:
     even the path to it. Cross-check against /sweep's per-user errors when
     someone reports "my emails aren't being picked up."
     """
-    client = bigquery.Client(project=PROJECT)
+    client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
     rows = client.query(
         f"SELECT email, status, onboarded_at, updated_at "
         f"FROM `{PROJECT}.{DATASET}.users` ORDER BY onboarded_at DESC"
@@ -137,6 +141,21 @@ def sweep(force: bool = False, dry_run: bool = False) -> dict:
     for user in active_users():
         try:
             gmail = get_service_for_user(user["gmail_secret"])
+        except RefreshError as exc:
+            # Only a refused login means the person has to reconnect. Fires
+            # once per break: active_users() only returns status='active'
+            # rows, so this inbox drops out until it is reconnected.
+            mark_reauthorization_required(user["email"])
+            try:
+                send_reauth_prompt(user["email"])
+                emailed = True
+            except Exception as notify_exc:  # noqa: BLE001 - logged below
+                emailed = f"failed: {notify_exc!r}"[:200]
+            event("inbox.needs_reconnect", "WARNING", inbox=user["email"], error=repr(exc)[:300],
+                  reconnect_email_sent=emailed)
+            results.append({"email": user["email"], "error": "reauthorization_required"})
+            continue
+        try:
             results.append(
                 ingestion.run_sweep_for_user(
                     user["email"], gmail, user["gmail_secret"],
@@ -144,25 +163,10 @@ def sweep(force: bool = False, dry_run: bool = False) -> dict:
                 )
             )
         except Exception as exc:
-            # extra={} fields don't reach Cloud Logging's textPayload with
-            # this app's plain logging.getLogger setup (no structured/JSON
-            # handler configured) — they were silently swallowed, which cost
-            # real debugging time tracking down a genuine classify.py bug
-            # tonight. Put the error in the message itself so it's always
-            # visible regardless of handler config.
-            log.warning(f"sweep.user_failed email={user['email']} error={exc!r}")
-            mark_reauthorization_required(user["email"])
-            # Fires exactly once per break: active_users() only ever returns
-            # status='active' rows, so this user drops out of the next sweep
-            # until they re-onboard and reset it — no separate dedup needed.
-            try:
-                send_reauth_prompt(user["email"])
-            except Exception as notify_exc:
-                log.error(
-                    "sweep.reauth_notify_failed",
-                    extra={"email": user["email"], "error": str(notify_exc)},
-                )
-            results.append({"email": user["email"], "error": "reauthorization_required"})
+            # Anything else (a model or BigQuery error) is retried on the next
+            # sweep: this inbox's watermark only moves when its sweep finishes.
+            event("sweep.inbox_failed", "ERROR", inbox=user["email"], error=repr(exc)[:300])
+            results.append({"email": user["email"], "error": "sweep failed; retried on the next sweep"})
     return {"users_checked": len(results), "results": results}
 
 
@@ -178,7 +182,13 @@ def work(envelope: dict) -> dict:
         return {"ok": False, "reason": "no Pub/Sub message data in envelope"}
 
     payload = json.loads(base64.b64decode(data).decode("utf-8"))
-    outcome = ingestion.execute_build(payload)
+    try:
+        outcome = ingestion.execute_build(payload)
+    except Exception as exc:
+        # Raised, so Pub/Sub redelivers it (up to five attempts, then the dead-letter topic).
+        event("build.error", "ERROR", thread_id=payload.get("thread_id"), client=payload.get("client_name"),
+              attempt=envelope.get("deliveryAttempt"), error=repr(exc)[:300])
+        raise
     return {"ok": outcome == "built", "outcome": outcome, "thread_id": payload.get("thread_id")}
 
 
@@ -203,7 +213,7 @@ def handle_message(email: str, message_id: str) -> dict:
         "Build a placeholder solution deck for whoever this is from."
     )
 
-    log.info("handle_message.done", extra={"email": email, "message_id": message_id})
+    event("handle_message.done", inbox=email, message_id=message_id)
     return {"ok": True, "agent_reply": reply}
 
 

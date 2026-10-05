@@ -23,6 +23,7 @@ case "$SET" in
 esac
 
 export BQ_DATASET=solutioning_agent_eval
+export SOLUTIONING_RUN=eval           # billing labels: eval spend, not live use
 export DECK_FOLDER_ID="${EVAL_DECK_FOLDER_ID:-11THzL-7Z1Cw4PdlFY6Ct4VtMR74amTZd}"
 export DECK_READER_DOMAIN=""          # eval decks are never shared
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"

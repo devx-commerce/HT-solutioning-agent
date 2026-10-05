@@ -1,8 +1,37 @@
 # Troubleshooting
 
-Logs for everything are in Cloud Logging. Useful filters:
-`resource.labels.service_name="solutioning-agent"` for the email pipeline,
-`resource.type="aiplatform.googleapis.com/ReasoningEngine"` for the agent.
+## Reading the logs
+
+Every step of the email loop writes one structured log line, so the logs read
+as a story: an email was found, judged, queued, built and announced. Open a
+service in Cloud Run > **Logs**, or use Logs Explorer with these filters:
+
+| To see | Filter |
+|---|---|
+| The email pipeline | `resource.labels.service_name="solutioning-agent"` |
+| Inbox connections | `resource.labels.service_name="solutioning-agent-onboarding"` |
+| The renderer | `resource.labels.service_name="solutioning-agent-renderer"` |
+| The agent | `resource.type="aiplatform.googleapis.com/ReasoningEngine"` |
+| One kind of event | `jsonPayload.event="build.done"` |
+| Everything about one brief | `jsonPayload.thread_id="<thread id>"` |
+| Only problems | `severity>=WARNING` |
+
+| Event | Where | Means |
+|---|---|---|
+| `sweep.found` | pipeline | A check found new email in an inbox: how many, and what it did with them. Checks that find nothing write no line. |
+| `email.not_a_brief` | pipeline | An email was judged not a brief, with the reason |
+| `email.skipped` | pipeline | An email's thread already has a deck or is being built |
+| `email.label_without_brief` | pipeline | Labelled `generate-deck`, but no brief could be read from it |
+| `brief.queued` | pipeline | A brief was found and queued: client, sender, subject, how it was picked up |
+| `build.started` / `build.done` | pipeline | The agent started a deck; the deck is built, with its link, who was notified and how long it took |
+| `build.failed` / `build.error` | pipeline | The agent finished without a deck / the build raised an error and will be retried |
+| `inbox.needs_reconnect` | pipeline | An inbox's access stopped working; the person was emailed a reconnect link |
+| `sweep.inbox_failed` | pipeline | Checking one inbox failed; it is retried on the next check |
+| `inbox.connect_started` / `inbox.connected` / `inbox.connect_failed` | onboarding | Someone opened the onboarding link / connected / was refused, with why |
+| `deck.published` / `deck.revised` | agent | A deck was published or a revision saved, with its link |
+| `deck.rejected` / `deck.revision_rejected` | agent | The deck broke the HT master deck rules; the agent fixes it and tries again |
+| `deck.renderer_unavailable` | agent | The renderer couldn't be reached |
+| `render.done` / `render.rejected` / `render.failed` | renderer | A deck was rendered / was invalid / the renderer failed |
 
 ## Pausing and resuming the inbox check
 
@@ -30,8 +59,8 @@ Or Cloud Scheduler in the console. Deploys never change whether it is paused.
 
 ## Builds fail
 
-Look in the pipeline's logs for `ingestion.build_failed`, then in the agent's
-logs at the same time.
+Look in the pipeline's logs for `build.failed` or `build.error`, then in the
+agent's logs at the same time.
 
 | Log says | Cause | Fix |
 |---|---|---|

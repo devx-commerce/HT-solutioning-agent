@@ -52,6 +52,10 @@ settings:
   # Deploying never pauses or resumes the check; see docs/operations.
   sweep_schedule: "*/5 * * * *"
 
+  # How far back a newly connected inbox is read on its first check, in hours
+  # (0 to 168). 0 reads only mail arriving from that first check on.
+  new_inbox_lookback_hours: 24
+
   # Deck rules.
   max_slides: 20   # longest deck the agent may build (7 to 30)
   min_images: 3    # pictures a new deck must have (0 to 10)
@@ -71,7 +75,7 @@ settings:
 
   # Evals: the short run after every deploy, and the full weekly run.
   evals:
-    after_deploy: smoke              # smoke (about 15 min), full (about 1 hour) or none
+    after_deploy: none               # none, smoke (about 15 min) or full (about 1 hour); see docs/operations/evals.md for cost
     smoke_cases: [pentonic, eli-lilly]
     weekly_schedule: "0 2 * * 0"     # Sundays 02:00 India time; full set, 3 runs
 

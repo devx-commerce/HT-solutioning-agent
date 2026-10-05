@@ -61,6 +61,8 @@ def problems(cfg: dict) -> list[str]:
                                               for d in v.values()),
          "must map each publication's name to a list of its domains")
     need(s, "sweep_schedule", lambda v: bool(_CRON.match(str(v))), "must be a cron schedule like \"*/30 * * * *\"")
+    need(s, "new_inbox_lookback_hours", lambda v: type(v) is int and 0 <= v <= 168,
+         "must be a whole number of hours from 0 to 168")
     need(s, "max_slides", lambda v: isinstance(v, int) and 7 <= v <= 30, "must be a whole number from 7 to 30")
     need(s, "min_images", lambda v: isinstance(v, int) and 0 <= v <= 10, "must be a whole number from 0 to 10")
     models = s.get("models") or {}
@@ -143,6 +145,7 @@ def pipeline_env(cfg: dict) -> dict[str, str]:
         "AGENT_ENGINE_RESOURCE":
             f"projects/{i['project_number']}/locations/{i['region']}/reasoningEngines/{i['agent_engine_id']}",
         "EXCLUDED_SENDERS": ",".join(s["excluded_senders"]),
+        "NEW_INBOX_LOOKBACK_HOURS": str(s["new_inbox_lookback_hours"]),
     }
 
 

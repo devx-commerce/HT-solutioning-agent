@@ -37,7 +37,7 @@ from googleapiclient.http import MediaFileUpload
 from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
-from . import master_deck, research, visuals, why_ht
+from . import billing, logs, master_deck, research, visuals, why_ht
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -257,7 +257,7 @@ def _save_brief(brief_id: str, **fields) -> None:
         bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id),
         bigquery.ScalarQueryParameter("now", "TIMESTAMP", now),
     ]
-    bigquery.Client(project=PROJECT).query(
+    bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config()).query(
         f"""
         MERGE `{PROJECT}.{DATASET}.briefs` T
         USING (SELECT @brief_id AS brief_id) S ON T.brief_id = S.brief_id
@@ -301,6 +301,8 @@ def build_solution_deck(
         return {"error": f"Deck JSON could not be parsed, nothing was published: {exc}"}
     problems = master_deck.enforce(deck) + master_deck.first_draft_problems(deck)
     if problems:
+        logs.event("deck.rejected", "WARNING", brief_id=brief_id, client=client_name,
+                   problems=len(problems), first_problem=problems[0])
         return {
             "error": "The deck breaks the HT master deck rules, nothing was "
             "published. Fix every item and call build_solution_deck again.",
@@ -325,8 +327,10 @@ def build_solution_deck(
     try:
         pptx = _render_pptx(deck_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
+        logs.event("deck.invalid", "WARNING", brief_id=brief_id, client=client_name, error=str(exc)[:200])
         return {"error": f"Deck was not valid, nothing was published: {exc}"}
     except RendererUnavailable as exc:
+        logs.event("deck.renderer_unavailable", "ERROR", brief_id=brief_id, error=str(exc)[:300])
         return {"error": _UNAVAILABLE_MSG + f" ({exc})"}
 
     created = _upload_pptx(
@@ -345,6 +349,8 @@ def build_solution_deck(
         deck_link=link,
         deck_json=deck_json,
     )
+    logs.event("deck.published", brief_id=resolved_brief, client=client_name,
+               slides=len(deck.get("slides", [])), link=link)
     return {"brief_id": resolved_brief, "deck_id": deck_id, "link": link, **pictures}
 
 
@@ -689,6 +695,8 @@ def _republish(brief_id: str, stored: dict, deck: dict, new_pictures_on=()) -> d
     """
     problems = master_deck.enforce(deck)
     if problems:
+        logs.event("deck.revision_rejected", "WARNING", brief_id=brief_id,
+                   problems=len(problems), first_problem=problems[0])
         return {
             "error": "The change would break the HT master deck rules, the deck "
             "is unchanged.",
@@ -707,18 +715,21 @@ def _republish(brief_id: str, stored: dict, deck: dict, new_pictures_on=()) -> d
     try:
         pptx = _render_pptx(updated_json)
     except (DeckRenderError, subprocess.SubprocessError) as exc:
+        logs.event("deck.invalid", "WARNING", brief_id=brief_id, error=str(exc)[:200])
         return {"error": f"Change rejected, the deck is unchanged: {exc}"}
     except RendererUnavailable as exc:
+        logs.event("deck.renderer_unavailable", "ERROR", brief_id=brief_id, error=str(exc)[:300])
         return {"error": _UNAVAILABLE_MSG + f" ({exc})"}
 
     _upload_pptx(pptx, name="", file_id=stored["deck_file_id"])
     _save_brief(brief_id, deck_json=updated_json, status="drafted")
+    logs.event("deck.revised", brief_id=brief_id, slides=len(deck.get("slides", [])), link=stored["deck_link"])
     return {"brief_id": brief_id, "link": stored["deck_link"], **pictures}
 
 
 def _load_brief(brief_id: str) -> dict | None:
     rows = list(
-        bigquery.Client(project=PROJECT).query(
+        bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config()).query(
             f"""
             SELECT brief_id, client_name, deck_file_id, deck_link, deck_json
             FROM `{PROJECT}.{DATASET}.briefs`
@@ -801,7 +812,7 @@ def lookup_deck(client_name: str) -> dict:
         one they mean; never pick one yourself.
     """
     rows = list(
-        bigquery.Client(project=PROJECT).query(
+        bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config()).query(
             f"""
             SELECT brief_id, client_name, deck_file_id, deck_link, updated_at,
                    JSON_VALUE(deck_json, '$.slides[0].heading') AS title,

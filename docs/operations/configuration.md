@@ -18,12 +18,13 @@ config.yaml has problems; nothing was deployed:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the weekly eval summary and the after-deploy eval summary. |
+| `eval_summary_email` | sales.agent@hindustantimes.com | Receives the weekly eval summary (and the after-deploy one, if turned on). |
 | `onboarding_domains` | hindustantimes.com, htdigital.in | Google Workspace domains whose people may connect an inbox. |
 | `deck_reader_domains` | hindustantimes.com, htdigital.in | Domains that can open (read only) the decks the agent creates. Applies to new decks. |
 | `excluded_senders` | HR, IT, payroll and newsletter addresses | Mail from these addresses is never treated as a brief, and never sent to the model. |
 | `competitor_outlets` | Times Group, Jagran, Bhaskar, Amar Ujala, Indian Express, The Hindu, The Tribune | Publications the agent never cites or names. A domain covers its subdomains. |
 | `sweep_schedule` | `*/5 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
+| `new_inbox_lookback_hours` | 24 | How far back a newly connected inbox is read on its first check (0 to 168). 0 reads only mail arriving from then on. |
 | `max_slides` | 20 | Longest deck the agent may build (7 to 30). |
 | `min_images` | 3 | Pictures a new deck must have (0 to 10). Existing decks stay editable whatever this is. |
 | `models.agent` | gemini-3.8-flash | Plans research, drafts and revises decks. |
@@ -34,7 +35,7 @@ config.yaml has problems; nothing was deployed:
 | `past_decks_folder_ids` | "Past Pitch Decks" | Folders the agent may cite as HT's past work. |
 | `ht_assets_folder_id` | HT brand assets | Folder holding the HT logo (any image with "logo" in its name). |
 | `briefs_sheet_id` | The briefs sheet | Sheet that gets one row per brief from email. |
-| `evals.after_deploy` | smoke | Evals after each deploy: `smoke` (about 15 minutes), `full` (about an hour) or `none`. |
+| `evals.after_deploy` | none | Evals after each deploy: `none`, `smoke` (about 15 minutes, about ₹300) or `full` (about an hour). Evals run weekly regardless. |
 | `evals.smoke_cases` | pentonic, eli-lilly | Which eval cases the smoke run uses. |
 | `evals.weekly_schedule` | `0 2 * * 0` | When the full weekly eval runs (Sundays 02:00 India time). |
 

@@ -41,6 +41,7 @@ edits and prices every deck before it goes to a client.
 | Deploy a change | [docs/operations/deploy.md](docs/operations/deploy.md) |
 | See every cloud resource it uses | [docs/operations/resources.md](docs/operations/resources.md) |
 | Check quality with evals | [docs/operations/evals.md](docs/operations/evals.md) |
+| See what it costs | [docs/operations/cost.md](docs/operations/cost.md) |
 | Report on usage | [docs/operations/weekly-report.md](docs/operations/weekly-report.md) |
 | Fix something that isn't working | [docs/operations/troubleshooting.md](docs/operations/troubleshooting.md) |
 
