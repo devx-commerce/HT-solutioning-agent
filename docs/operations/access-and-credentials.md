@@ -69,6 +69,21 @@ Add a new version with `gcloud secrets versions add <name> --data-file=<file>`.
 Never disable the latest version to "roll back": Secret Manager still serves
 the newest version even when it is disabled. Add a new version instead.
 
+## The deploy's own access
+
+Deploys and the evals after them run in Cloud Build as the compute service
+account. Besides reading the secrets above, it signs itself in to the private
+deck renderer during evals, which needs this once per project:
+
+```bash
+SA=296974829876-compute@developer.gserviceaccount.com
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --member=serviceAccount:$SA --role=roles/iam.serviceAccountOpenIdTokenCreator
+```
+
+Without it the deploy still succeeds, but every after-deploy eval reports
+"the rendering service is unavailable" and fails its deck check.
+
 ## Workspace admin settings this depends on
 
 - The OAuth consent screen is **Internal** to HT's Workspace, which is why

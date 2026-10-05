@@ -16,6 +16,10 @@ sound, and is it built properly?
 A failing eval never blocks a deploy. Read the summary, and treat a drop in
 scores as a signal to look at that case.
 
+For the same reason, the `evals` step in Cloud Build always shows as
+successful. The result is in the summary email and at the end of that step's
+log ("Evals: N of M cases passed").
+
 ## What's evaluated
 
 **Nine real briefs HT's sales team received** (Stanley Furniture, Eli Lilly,
