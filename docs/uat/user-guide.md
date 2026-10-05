@@ -58,6 +58,10 @@ When it finds a brief:
    sales.agent@hindustantimes.com. It contains:
    - a summary of the brief as the agent understood it;
    - a button to open the deck;
+   - a **Refine this deck with the agent** button: it opens the Solutioning
+     Agent in Gemini Enterprise with the deck already named ("On the
+     Decathlon deck (brief 1a10…), change "). Finish the sentence and send;
+     see [Using chat](#using-chat-in-gemini-enterprise) for what you can ask;
    - the evidence it found, each point with a link to its source;
    - which sources it checked and which returned nothing;
    - the gaps: things it could not establish and you should check.

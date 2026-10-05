@@ -52,6 +52,12 @@ datasets, buckets and secrets. Changing it points the agent at different
 resources; it doesn't move or create data. See [resources.md](resources.md)
 for what each one is.
 
+`gemini_enterprise_agent_url` is the Solutioning Agent's own address in
+Gemini Enterprise, used for the deep link to the refinement loop in each
+"deck drafted" email. To find it, open the agent from Agents in Gemini
+Enterprise and copy the address up to and including `/r/agent/<id>`, leaving
+out any `/u/1/` (which names one person's browser account).
+
 ## Where settings end up
 
 The deploy turns `config.yaml` into each service's settings:

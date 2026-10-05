@@ -100,6 +100,9 @@ infrastructure:
   eval_results_bucket: academic-diode-477405-m3-solutioning-agent-evals
   agent_engine_id: "1985844993356464128"   # updated in place on every deploy
   past_decks_engine: ht-sales-pitch-agent_1789729673554
+  # The Solutioning Agent in Gemini Enterprise: the "Refine this deck" button
+  # in each "deck drafted" email opens it with the deck already named.
+  gemini_enterprise_agent_url: https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a/r/agent/15297440114283783461
   past_decks_location: us
   services:
     pipeline: solutioning-agent

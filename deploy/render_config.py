@@ -81,6 +81,9 @@ def problems(cfg: dict) -> list[str]:
                 "eval_dataset", "eval_deck_folder_id", "eval_results_bucket", "agent_engine_id",
                 "past_decks_engine", "past_decks_location", "pubsub_topic", "scheduler_job"):
         need(i, key, lambda v: bool(str(v).strip()), "is required")
+    need(i, "gemini_enterprise_agent_url",
+         lambda v: str(v).startswith("https://vertexaisearch.cloud.google.com/") and "/r/agent/" in str(v),
+         "must be the agent's Gemini Enterprise address, ending in /r/agent/<id>")
     need(i.get("services") or {}, "pipeline", bool, "services.pipeline is required")
     need(i.get("services") or {}, "onboarding", bool, "services.onboarding is required")
     need(i.get("services") or {}, "renderer", bool, "services.renderer is required")
@@ -146,6 +149,8 @@ def pipeline_env(cfg: dict) -> dict[str, str]:
             f"projects/{i['project_number']}/locations/{i['region']}/reasoningEngines/{i['agent_engine_id']}",
         "EXCLUDED_SENDERS": ",".join(s["excluded_senders"]),
         "NEW_INBOX_LOOKBACK_HOURS": str(s["new_inbox_lookback_hours"]),
+        # Never one person's browser account (/u/1/): each reader opens it in their own default.
+        "GE_AGENT_URL": re.sub(r"/u/\d+/", "/", i["gemini_enterprise_agent_url"].split("/session/")[0]).rstrip("/"),
     }
 
 

@@ -27,6 +27,7 @@ def test_the_shipped_config_is_valid():
     (("settings", "deck_folder_id"), "https://drive.google.com/x", "Drive or Sheets id"),
     (("settings", "competitor_outlets"), {"TOI": "indiatimes.com"}, "list of its domains"),
     (("infrastructure", "agent_engine_id"), "", "agent_engine_id: is required"),
+    (("infrastructure", "gemini_enterprise_agent_url"), "https://example.com/agent", "/r/agent/"),
 ])
 def test_a_mistake_is_explained_not_deployed(path, value, says):
     cfg = copy.deepcopy(CFG)
@@ -50,6 +51,7 @@ def test_services_get_the_settings_the_code_reads():
     assert agent["RENDER_URL"] == "https://solutioning-agent-renderer-296974829876.us-central1.run.app"
     assert "STATE_SIGNING_KEY" not in pipeline  # a secret, mounted by the deploy, never a plain value
     assert rc.onboarding_env(CFG)["PUBLIC_ROUTES_ONLY"] == "true"
+    assert pipeline["GE_AGENT_URL"].endswith("/r/agent/15297440114283783461") and "/u/" not in pipeline["GE_AGENT_URL"]
 
 
 def test_the_defaults_in_code_match_the_shipped_config():

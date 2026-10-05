@@ -86,6 +86,19 @@ def _search_count(r: dict) -> str:
     return f" ({calls} searches)"
 
 
+def refinement_link(client_name: str | None, brief_id: str) -> str | None:
+    """The deep link to the refinement loop: the Solutioning Agent in Gemini
+    Enterprise, opened on a new chat with the deck already named in the
+    message box ("On the Sleepwell deck (brief 1a0f…), change "), so the
+    person only has to finish the sentence. None if no agent URL is set.
+    """
+    base = os.environ.get("GE_AGENT_URL", "").rstrip("/")
+    if not base:
+        return None
+    prompt = f"On the {client_name or 'client'} deck (brief {brief_id}), change "
+    return f"{base}/session/-?q={urllib.parse.quote(prompt, safe='')}"
+
+
 def send_deck_notification(
     to: str,
     client_name: str | None,
@@ -95,6 +108,7 @@ def send_deck_notification(
     gaps: list[str] | None = None,
     retrievals: list[dict] | None = None,
     allowed_urls: set[str] | None = None,
+    refine_link: str | None = None,
 ) -> None:
     """One new email to the inbox the brief came from: never a reply on the
     triggering thread, which may have external participants.
@@ -133,7 +147,11 @@ BRIEF
 
 DRAFT DECK
   {deck_link or '(no deck link was returned)'}
-
+{f"""
+REFINE THIS DECK
+  Opens the Solutioning Agent with this deck named; finish the sentence and send.
+  {refine_link}
+""" if refine_link else ""}
 EVIDENCE SUMMARY
 {evidence or '  (none reported)'}
 
@@ -153,7 +171,7 @@ forward, not a client-ready document.
     message = email.mime.multipart.MIMEMultipart("alternative")
     message.attach(email.mime.text.MIMEText(body, "plain", "utf-8"))
     message.attach(email.mime.text.MIMEText(
-        _html_body(client_name, brief, deck_link, evidence, gaps, retrievals),
+        _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link),
         "html", "utf-8",
     ))
     message["to"] = to
@@ -307,7 +325,7 @@ def _section(title: str, inner: str) -> str:
     )
 
 
-def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals) -> str:
+def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link=None) -> str:
     client = html.escape(client_name or "(not extracted)")
     deck = (
         f'<a href="{html.escape(deck_link)}" style="display:inline-block;background:{_CYAN};'
@@ -315,6 +333,15 @@ def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals) -> str
         f'border-radius:6px;">Open the draft deck in Google Slides</a>'
         if deck_link else f'<p style="color:{_MUTED};">No deck link was returned.</p>'
     )
+    if refine_link:
+        deck += (
+            f'&nbsp;&nbsp;<a href="{html.escape(refine_link)}" style="display:inline-block;'
+            f'border:1px solid {_CYAN};color:{_CYAN};text-decoration:none;font-weight:bold;'
+            f'padding:9px 17px;border-radius:6px;">Refine this deck with the agent</a>'
+            f'<p style="margin:10px 0 0;color:{_MUTED};font-size:12px;">Opens the Solutioning Agent in '
+            f'Gemini Enterprise with this deck already named. Finish the sentence, for example '
+            f'"the picture on slide 6 to a pandal at night", and send.</p>'
+        )
     gap_html = (
         "<ul style=\"margin:0;padding-left:20px;\">"
         + "".join(f'<li style="margin:0 0 6px;">{_inline_html(g)}</li>' for g in gaps)

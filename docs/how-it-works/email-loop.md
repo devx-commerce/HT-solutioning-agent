@@ -33,7 +33,10 @@
    - labels the email **deck-generated** in the inbox it came from;
    - emails that inbox "Solution deck drafted: <client>", from
      sales.agent@hindustantimes.com, with the deck link, the evidence and its
-     sources, which sources returned nothing, and the gaps;
+     sources, which sources returned nothing, and the gaps. A "Refine this
+     deck" button is the deep link to the refinement loop: it opens the
+     Solutioning Agent in Gemini Enterprise with the deck's name and brief ID
+     already typed in (`infrastructure.gemini_enterprise_agent_url`);
    - adds a row to the briefs sheet (client, brief, touchpoints, category,
      month).
 

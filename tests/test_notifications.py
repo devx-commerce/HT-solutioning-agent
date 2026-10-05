@@ -7,6 +7,8 @@ The agent writes Markdown. Sent as plain text, Gmail showed the ###, ** and
 from __future__ import annotations
 
 import base64
+import html
+import urllib.parse
 import email
 from unittest.mock import MagicMock, patch
 
@@ -181,3 +183,34 @@ def test_the_notification_goes_to_the_inbox_the_brief_came_from(sent):
 def test_no_recipient_is_an_error_not_a_silent_drop():
     with pytest.raises(RuntimeError, match="No recipient"):
         notifications.send_deck_notification("", "Acme", "brief")
+
+
+AGENT = "https://vertexaisearch.cloud.google.com/us/home/cid/c1/r/agent/15297440114283783461"
+
+
+def test_the_refinement_deep_link_opens_the_agent_with_the_deck_named(monkeypatch):
+    monkeypatch.setenv("GE_AGENT_URL", AGENT)
+    link = notifications.refinement_link("Rocksport", "1a10bf78168a2229")
+    assert link.startswith(AGENT + "/session/-?q=")
+    assert urllib.parse.unquote(link.split("?q=", 1)[1]) == "On the Rocksport deck (brief 1a10bf78168a2229), change "
+
+
+def test_no_agent_url_means_no_refinement_link(monkeypatch):
+    monkeypatch.delenv("GE_AGENT_URL", raising=False)
+    assert notifications.refinement_link("Rocksport", "b1") is None
+
+
+def test_the_email_carries_the_refine_button_when_there_is_a_link():
+    captured = {}
+    gmail = MagicMock()
+    gmail.users.return_value.messages.return_value.send.side_effect = (
+        lambda userId, body: captured.update(body) or MagicMock())
+    link = AGENT + "/session/-?q=On%20the%20Acme%20deck"
+    with patch.object(notifications, "build", return_value=gmail), \
+         patch.object(notifications, "get_credentials", return_value=None):
+        notifications.send_deck_notification("am@hindustantimes.com", "Acme", "b",
+                                             deck_link="https://docs.google.com/presentation/d/abc/edit",
+                                             refine_link=link)
+    msg = email.message_from_bytes(base64.urlsafe_b64decode(captured["raw"]))
+    assert "Refine this deck with the agent" in _part(msg, "html") and html.escape(link) in _part(msg, "html")
+    assert link in _part(msg, "plain")
