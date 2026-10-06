@@ -58,7 +58,7 @@ def test_markdown_evidence_is_rendered_not_shown_literally(sent):
     assert "###" not in body and "**" not in body and "](" not in body
     assert "Research findings</h3>" in body
     assert "<strong>Brand strategy:</strong>" in body
-    assert 'href="https://www.mxmindia.com/x"' in body and ">MxM India</a>" in body
+    assert 'href="https://www.mxmindia.com/x"' in body and ">mxmindia.com</a>" in body  # links are named by their site
 
 
 def test_bullets_nested_the_way_the_agent_writes_them_render_as_a_nested_list():
@@ -230,3 +230,19 @@ def test_the_email_carries_the_refine_button_when_there_is_a_link():
     msg = email.message_from_bytes(base64.urlsafe_b64decode(captured["raw"]))
     assert "Refine this deck with the agent" in _part(msg, "html") and html.escape(link) in _part(msg, "html")
     assert link in _part(msg, "plain")
+
+
+@pytest.mark.parametrize("written, shown", [
+    ("[source](https://www.medianews4u.com/liberty-chalo)", "[medianews4u.com](https://www.medianews4u.com/liberty-chalo)"),
+    ("[Source: Indian Retailer](https://indianretailer.com/x)", "[indianretailer.com](https://indianretailer.com/x)"),
+    ("[Muthoot Finance Proposal.pdf](https://drive.google.com/a/hindustantimes.com/open?id=13hZ7hxltZ5tDk0VXyv4HjdB0Zm5OGylb)",
+     "[HT past deck: Muthoot Finance Proposal](https://drive.google.com/a/hindustantimes.com/open?id=13hZ7hxltZ5tDk0VXyv4HjdB0Zm5OGylb)"),
+    ("[source](https://drive.google.com/open?id=13hZ7hxltZ5tDk0VXyv4HjdB0Zm5OGylb)",
+     "[HT past deck](https://drive.google.com/open?id=13hZ7hxltZ5tDk0VXyv4HjdB0Zm5OGylb)"),
+    ("[Bata ad](https://www.youtube.com/watch?v=abcdefgh123)", "[YouTube](https://www.youtube.com/watch?v=abcdefgh123)"),
+    ("[View Deck: Liberty](https://docs.google.com/presentation/d/1IkH4oAVmpJV-GQNRfYk9tdt8Z58eT5KsB2nqkcxaaX8/edit?usp=drivesdk)",
+     "[Draft deck](https://docs.google.com/presentation/d/1IkH4oAVmpJV-GQNRfYk9tdt8Z58eT5KsB2nqkcxaaX8/edit?usp=drivesdk)"),
+])
+def test_every_link_in_the_email_is_named_the_same_way(written, shown):
+    deck = "https://docs.google.com/presentation/d/1IkH4oAVmpJV-GQNRfYk9tdt8Z58eT5KsB2nqkcxaaX8/edit"
+    assert notifications.uniform_links(f"- A finding ({written})", deck) == f"- A finding ({shown})"

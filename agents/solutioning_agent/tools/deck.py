@@ -580,6 +580,7 @@ def _place_image(brief_id: str, slide_index: int, target: str, data: bytes, mime
         if not uri:
             return {"rejected": why, "deck_unchanged": True}
         slide["image"] = uri
+        slide.pop("disclaimer", None)  # a real picture from the HT team
         slide["imageFit"] = "cover"
         slide["imageAlt"] = slide.get("imageAlt") or "Image supplied by the HT team"
         placed = f"picture on slide {slide_index}"

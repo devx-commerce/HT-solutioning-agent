@@ -22579,7 +22579,13 @@ var deck_schema_default = {
             "ranked-list",
             "logo-wall",
             "streak-grid",
-            "metric-ring"
+            "metric-ring",
+            "at-a-glance",
+            "options",
+            "innovation",
+            "numbered-rows",
+            "stat-story",
+            "campaign-matrix"
           ]
         },
         variant: {
@@ -22976,6 +22982,36 @@ var deck_schema_default = {
         notes: {
           type: "string",
           description: "Speaker notes \u2014 round-trip via PPTX import/export; not rendered on the HTML slide."
+        },
+        htIp: {
+          type: "boolean",
+          description: "The slide is about one of HT's own properties or IPs: shows an HT MEDIA IP badge."
+        },
+        source: {
+          type: "string",
+          description: "Small print at the slide's foot: where a figure comes from."
+        },
+        disclaimer: {
+          type: "string",
+          description: "Small print at the slide's foot, e.g. that pictures are indicative."
+        },
+        facts: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "label",
+              "value"
+            ],
+            properties: {
+              label: {
+                type: "string"
+              },
+              value: {
+                type: "string"
+              }
+            }
+          }
         }
       }
     }
@@ -23829,8 +23865,62 @@ function heading(slide, ctx, text, opts) {
     ...opts
   });
 }
+function tint(hex, toWhite = 0.8) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const mix = (c) => Math.round(c + (255 - c) * toWhite);
+  return [n >> 16 & 255, n >> 8 & 255, n & 255].map((c) => mix(c).toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+var MARKUP = /(^|\n)\s*[-\u2022]\s|\*\*[^*]+\*\*|==[^=]+==/;
+function textHeight(text, w, size) {
+  const perLine = Math.max(1, Math.floor((w * 72 - 16) / (size * 0.52)));
+  const rows = text.replace(/\*\*|==/g, "").split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+  return rows * size * 1.1 * 1.25 / 72;
+}
+function fitFontSize(text, w, h, min, max) {
+  const lines = text.replace(/\*\*|==/g, "").split("\n");
+  for (let size = max; size > min; size -= 1) {
+    const perLine = Math.max(1, Math.floor((w * 72 - 16) / (size * 0.52)));
+    const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0);
+    if (rows * size * 1.1 * 1.25 / 72 <= h * 0.85)
+      return size;
+  }
+  return min;
+}
+function rich(ctx, text) {
+  if (!MARKUP.test(text))
+    return text;
+  const lines = text.split("\n");
+  const runs = [];
+  lines.forEach((line, li) => {
+    const bullet = /^\s*[-\u2022]\s+/.test(line);
+    const content = bullet ? line.replace(/^\s*[-\u2022]\s+/, "") : line;
+    const parts = content.split(/(\*\*[^*]+\*\*|==[^=]+==)/).filter((p) => p !== "");
+    if (parts.length === 0)
+      parts.push(" ");
+    parts.forEach((part, pi) => {
+      const options = {};
+      let text2 = part;
+      if (/^\*\*[^*]+\*\*$/.test(part)) {
+        text2 = part.slice(2, -2);
+        options.bold = true;
+        options.color = ctx.colors.text;
+      } else if (/^==[^=]+==$/.test(part)) {
+        text2 = part.slice(2, -2);
+        options.highlight = tint(ctx.colors.accent);
+        options.color = ctx.colors.text;
+      }
+      options.align = "left";
+      if (bullet)
+        options.bullet = { indent: 14 };
+      if (pi === parts.length - 1 && li < lines.length - 1)
+        options.breakLine = true;
+      runs.push({ text: text2, options });
+    });
+  });
+  return runs;
+}
 function body(slide, ctx, text, opts) {
-  slide.addText(text, {
+  slide.addText(rich(ctx, text), {
     fontFace: ctx.fonts.body,
     color: ctx.colors.muted,
     fontSize: 16,
@@ -24116,7 +24206,7 @@ function renderTwoColumn(slide, ctx, data) {
     addImageOrPlaceholder(slide, ctx, data, mediaX, imgY, mediaW, imgH);
   } else if (data.aside) {
     drawCardFace(slide, ctx, mediaX, imgY, mediaW, imgH, ctx.colors.cardBg, { hero: true });
-    slide.addText(data.aside, {
+    slide.addText(rich(ctx, data.aside), {
       x: mediaX + 0.3,
       y: imgY + 0.4,
       w: mediaW - 0.6,
@@ -24320,27 +24410,20 @@ function drawFeatureCard(slide, ctx, card, x, y, w, h, opts = {}) {
     valign: "top"
   });
   if (card.body) {
-    slide.addText(card.body, {
+    slide.addText(rich(ctx, card.body), {
       x: x + pad,
       y: titleY + titleH + 0.05,
       w: w - pad * 2,
       h: Math.max(0.4, h - (titleY - y) - titleH - 0.3),
       fontFace: ctx.fonts.body,
       color: bodyInk,
-      fontSize: hero ? 14 : 12,
+      // never larger than the card title; one size across a grid's cards
+      fontSize: opts.bodySize ?? fitFontSize(card.body, w - pad * 2, Math.max(0.4, h - (titleY - y) - titleH - 0.3), hero ? 15 : 14, hero ? 18 : 16),
       fit: "shrink",
       valign: "top",
       lineSpacingMultiple: 1.1
     });
   }
-}
-function featureCardHeight(card, w) {
-  const textW = Math.max(0.5, w - 0.4);
-  const charsPerLine = Math.max(8, Math.floor(textW * 12));
-  const titleLines = Math.ceil((card.title?.length ?? 0) / Math.floor(charsPerLine * 0.75)) || 1;
-  const bodyLines = card.body ? Math.ceil(card.body.length / charsPerLine) : 0;
-  const top = card.image ? 0.2 + 0.9 + 0.15 + 0.13 : card.icon ? 0.6 : 0.25;
-  return top + titleLines * 0.32 + 0.1 + bodyLines * 0.2 + 0.35;
 }
 function renderBentoGrid(slide, ctx, cards, areaX, areaY, areaW, areaH) {
   const gap = 0.28;
@@ -24383,15 +24466,427 @@ function renderFeatureGrid(slide, ctx, data) {
   cols = Math.max(1, Math.min(4, cols, cards.length));
   const rows = Math.ceil(cards.length / cols);
   const cardW = (areaW - gap * (cols - 1)) / cols;
-  const fullH = (areaH - gap * (rows - 1)) / rows;
-  const cardH = Math.min(fullH, Math.max(1.6, ...cards.map((c) => featureCardHeight(c, cardW))));
+  let cardH = (areaH - gap * (rows - 1)) / rows;
+  let top0 = areaY;
+  if (rows === 1) {
+    const needed = 0.8 + Math.max(...cards.map((c) => c.body ? textHeight(c.body, cardW - 0.4, 16) : 0)) + 0.45;
+    cardH = Math.min(areaH, Math.max(areaH * 0.6, needed));
+    top0 = areaY + (areaH - cardH) / 2;
+  }
+  const bodyH = Math.max(0.4, cardH - 0.25 - 0.5 - 0.3);
+  const bodySize = Math.min(...cards.map((c) => c.body ? fitFontSize(c.body, cardW - 0.4, bodyH, 14, 16) : 16));
   cards.forEach((card, i) => {
     const r = Math.floor(i / cols);
     const c = i % cols;
     const x = areaX + c * (cardW + gap);
-    const y = areaY + r * (cardH + gap);
-    drawFeatureCard(slide, ctx, card, x, y, cardW, cardH);
+    const y = top0 + r * (cardH + gap);
+    drawFeatureCard(slide, ctx, card, x, y, cardW, cardH, { bodySize });
   });
+}
+function renderAtAGlance(slide, ctx, data) {
+  const top = renderHeaderBlock(slide, ctx, data);
+  const facts = Array.isArray(data.facts) ? data.facts : [];
+  if (facts.length === 0)
+    return;
+  const x = ctx.margin;
+  const full = ctx.width - ctx.margin * 2;
+  const areaY = top + 0.15;
+  const areaH = ctx.height - areaY - ctx.margin;
+  const gap = 0.4;
+  const w = data.image ? full * 0.58 : full;
+  if (data.image)
+    addImageOrPlaceholder(slide, ctx, data, x + w + gap, areaY, full - w - gap, areaH);
+  const rowH = Math.min(1, areaH / facts.length);
+  const labelW = w * (data.image ? 0.34 : 0.28);
+  facts.forEach((fact, i) => {
+    const y = areaY + i * rowH;
+    slide.addShape(ctx.shapeRoundRect, {
+      x,
+      y,
+      w,
+      h: 0.012,
+      rectRadius: 0,
+      fill: { color: ctx.colors.border },
+      line: { color: ctx.colors.border, width: 0 }
+    });
+    slide.addText(fact.label, {
+      x,
+      y: y + 0.08,
+      w: labelW - 0.2,
+      h: rowH - 0.16,
+      fontFace: ctx.fonts.body,
+      bold: true,
+      color: ctx.colors.accent2,
+      fontSize: 15,
+      valign: "middle",
+      fit: "shrink"
+    });
+    slide.addText(rich(ctx, fact.value), {
+      x: x + labelW,
+      y: y + 0.08,
+      w: w - labelW,
+      h: rowH - 0.16,
+      fontFace: ctx.fonts.body,
+      color: ctx.colors.text,
+      fontSize: 15,
+      valign: "middle",
+      fit: "shrink",
+      lineSpacingMultiple: 1.1
+    });
+  });
+}
+function renderOptions(slide, ctx, data) {
+  const top = renderHeaderBlock(slide, ctx, data);
+  const items = (data.cards ?? []).slice(0, 4);
+  if (items.length === 0)
+    return;
+  const gap = 0.35;
+  const x0 = ctx.margin;
+  const areaW = ctx.width - ctx.margin * 2;
+  const colW = (areaW - gap * (items.length - 1)) / items.length;
+  const y0 = top + 0.15;
+  const h = ctx.height - y0 - ctx.margin;
+  items.forEach((item, i) => {
+    const x = x0 + i * (colW + gap);
+    slide.addShape(ctx.shapeRoundRect, {
+      x,
+      y: y0,
+      w: colW,
+      h: 0.035,
+      rectRadius: 0,
+      fill: { color: ctx.colors.accent },
+      line: { color: ctx.colors.accent, width: 0 }
+    });
+    slide.addText(String(i + 1).padStart(2, "0"), {
+      x,
+      y: y0 + 0.15,
+      w: colW,
+      h: 0.7,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.accent,
+      fontSize: 32,
+      valign: "top"
+    });
+    slide.addText(item.title, {
+      x,
+      y: y0 + 0.9,
+      w: colW,
+      h: 0.75,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.text,
+      fontSize: 17,
+      valign: "top",
+      fit: "shrink"
+    });
+    if (item.body) {
+      slide.addText(rich(ctx, item.body), {
+        x,
+        y: y0 + 1.7,
+        w: colW,
+        h: Math.max(0.6, h - 1.75),
+        fontFace: ctx.fonts.body,
+        color: ctx.colors.muted,
+        fontSize: fitFontSize(item.body, colW, Math.max(0.6, h - 1.75), 15, 16),
+        valign: "top",
+        fit: "shrink",
+        lineSpacingMultiple: 1.1
+      });
+    }
+  });
+}
+function renderInnovation(slide, ctx, data) {
+  const parts = Array.isArray(data.facts) ? data.facts : [];
+  const gap = 0.45;
+  const areaW = ctx.width - ctx.margin * 2;
+  const imgW = areaW * 0.52;
+  addImageOrPlaceholder(slide, ctx, data, ctx.margin, ctx.margin, imgW, ctx.height - ctx.margin * 2);
+  const x = ctx.margin + imgW + gap;
+  const w = areaW - imgW - gap;
+  let y = ctx.margin;
+  if (data.eyebrow) {
+    eyebrow(slide, ctx, data.eyebrow, x, y, w, { tone: typeof data.tone === "string" ? data.tone : void 0 });
+    y += 0.45;
+  }
+  if (data.heading) {
+    heading(slide, ctx, data.heading, { x, y, w, h: 1.15, fontSize: fitFontSize(data.heading, w * 0.92, 1.15, 20, 26) });
+    y += 1.3;
+  }
+  if (parts.length === 0)
+    return;
+  const partH = (ctx.height - ctx.margin - y) / parts.length;
+  parts.forEach((part, i) => {
+    const py = y + i * partH;
+    slide.addText(part.label, {
+      x,
+      y: py,
+      w,
+      h: 0.32,
+      fontFace: ctx.fonts.body,
+      bold: true,
+      color: ctx.colors.accent2,
+      fontSize: 13,
+      valign: "top"
+    });
+    slide.addText(rich(ctx, part.value), {
+      x,
+      y: py + 0.34,
+      w,
+      h: Math.max(0.4, partH - 0.42),
+      fontFace: ctx.fonts.body,
+      color: ctx.colors.text,
+      fontSize: fitFontSize(part.value, w, Math.max(0.4, partH - 0.42), 13, 15),
+      valign: "top",
+      fit: "shrink",
+      lineSpacingMultiple: 1.1
+    });
+  });
+}
+function renderNumberedRows(slide, ctx, data) {
+  const top = renderHeaderBlock(slide, ctx, data);
+  const rows = (data.cards ?? []).slice(0, 6);
+  if (rows.length === 0)
+    return;
+  const x = ctx.margin;
+  const w = ctx.width - ctx.margin * 2;
+  const areaY = top + 0.15;
+  const gap = 0.14;
+  const rowH = Math.min(1.3, (ctx.height - areaY - ctx.margin - gap * (rows.length - 1)) / rows.length);
+  const titleW = w * 0.3;
+  rows.forEach((row, i) => {
+    const y = areaY + i * (rowH + gap);
+    drawCardFace(slide, ctx, x, y, w, rowH, ctx.colors.cardBg);
+    slide.addShape(ctx.shapeRoundRect, {
+      x,
+      y,
+      w: 0.07,
+      h: rowH,
+      rectRadius: 0,
+      fill: { color: ctx.colors.accent },
+      line: { color: ctx.colors.accent, width: 0 }
+    });
+    slide.addText(String(i + 1).padStart(2, "0"), {
+      x: x + 0.25,
+      y,
+      w: 0.7,
+      h: rowH,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.accent,
+      fontSize: 22,
+      valign: "middle"
+    });
+    slide.addText(row.title, {
+      x: x + 1.05,
+      y,
+      w: titleW,
+      h: rowH,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.cardText,
+      fontSize: 15,
+      valign: "middle",
+      fit: "shrink"
+    });
+    if (row.body) {
+      const bx = x + 1.05 + titleW + 0.25;
+      slide.addText(rich(ctx, row.body), {
+        x: bx,
+        y,
+        w: x + w - bx - 0.25,
+        h: rowH,
+        fontFace: ctx.fonts.body,
+        color: ctx.colors.cardMuted,
+        fontSize: 14,
+        valign: "middle",
+        fit: "shrink"
+      });
+    }
+  });
+}
+function renderStatStory(slide, ctx, data) {
+  const top = renderHeaderBlock(slide, ctx, data);
+  const stats = (data.stats ?? []).slice(0, 3);
+  const areaY = top + 0.2;
+  const areaH = ctx.height - areaY - ctx.margin - 0.15;
+  const x = ctx.margin;
+  const full = ctx.width - ctx.margin * 2;
+  const leftW = full * 0.36;
+  const gap = 0.6;
+  const slotH = Math.min(1.9, areaH / Math.max(1, stats.length));
+  const blockH = slotH * stats.length;
+  const blockY = areaY + (areaH - blockH) / 2;
+  const valueSize = stats.length === 1 ? 60 : stats.length === 2 ? 44 : 36;
+  const valueH = valueSize / 72 * 1.25;
+  stats.forEach((stat2, i) => {
+    const y = blockY + i * slotH;
+    slide.addShape(ctx.shapeRoundRect, {
+      x,
+      y: y + 0.08,
+      w: 0.06,
+      h: slotH - 0.3,
+      rectRadius: 0,
+      fill: { color: ctx.colors.accent },
+      line: { color: ctx.colors.accent, width: 0 }
+    });
+    slide.addText(stat2.value, {
+      x: x + 0.3,
+      y,
+      w: leftW - 0.3,
+      h: valueH,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.accent,
+      fontSize: valueSize,
+      valign: "top",
+      fit: "shrink"
+    });
+    slide.addText(stat2.label, {
+      x: x + 0.3,
+      y: y + valueH,
+      w: leftW - 0.3,
+      h: Math.max(0.35, slotH - valueH - 0.2),
+      fontFace: ctx.fonts.body,
+      color: ctx.colors.muted,
+      fontSize: 14,
+      valign: "top",
+      fit: "shrink"
+    });
+  });
+  if (data.body) {
+    const bx = x + (stats.length ? leftW + gap : 0);
+    const bw = full - (bx - x);
+    const bh = Math.min(areaH, Math.max(2.6, stats.length ? blockH : areaH));
+    const by = areaY + (areaH - bh) / 2;
+    drawCardFace(slide, ctx, bx, by, bw, bh, ctx.colors.cardBg);
+    body(slide, ctx, data.body, {
+      x: bx + 0.4,
+      y: by + 0.3,
+      w: bw - 0.8,
+      h: bh - 0.6,
+      color: ctx.colors.cardText,
+      fontSize: fitFontSize(data.body, bw - 0.8, bh - 0.6, 16, 18),
+      valign: "middle"
+    });
+  }
+}
+function renderCampaignMatrix(slide, ctx, data) {
+  const top = renderHeaderBlock(slide, ctx, data, false);
+  const headers = Array.isArray(data.columns) ? data.columns.map(String) : [];
+  const rows = data.rows ?? [];
+  if (headers.length < 2 || rows.length === 0)
+    return;
+  const x = ctx.margin;
+  const w = ctx.width - ctx.margin * 2;
+  const firstW = w * 0.22;
+  const colW = (w - firstW) / (headers.length - 1);
+  const colX = (i) => i === 0 ? x : x + firstW + (i - 1) * colW;
+  const y0 = top + 0.15;
+  const headH = 0.45;
+  headers.forEach((label, i) => {
+    if (i === 0) {
+      slide.addText(label, {
+        x,
+        y: y0,
+        w: firstW,
+        h: headH,
+        fontFace: ctx.fonts.body,
+        bold: true,
+        color: ctx.colors.muted,
+        fontSize: 12,
+        valign: "middle"
+      });
+      return;
+    }
+    slide.addShape(ctx.shapeRoundRect, {
+      x: colX(i) + 0.08,
+      y: y0,
+      w: colW - 0.16,
+      h: headH,
+      rectRadius: 0.08,
+      fill: { color: ctx.colors.accent },
+      line: { color: ctx.colors.accent, width: 0 }
+    });
+    slide.addText(label, {
+      x: colX(i) + 0.08,
+      y: y0,
+      w: colW - 0.16,
+      h: headH,
+      fontFace: ctx.fonts.heading,
+      bold: true,
+      color: ctx.colors.bg,
+      fontSize: 13,
+      align: "center",
+      valign: "middle",
+      fit: "shrink"
+    });
+  });
+  const areaY = y0 + headH + 0.12;
+  const rowH = Math.min(1, (ctx.height - areaY - ctx.margin) / rows.length);
+  rows.forEach((row, r) => {
+    const y = areaY + r * rowH;
+    slide.addShape(ctx.shapeRoundRect, {
+      x,
+      y,
+      w,
+      h: 0.012,
+      rectRadius: 0,
+      fill: { color: ctx.colors.border },
+      line: { color: ctx.colors.border, width: 0 }
+    });
+    headers.forEach((_, i) => {
+      const cell = String(row[i] ?? "").trim();
+      slide.addText(i === 0 ? cell : cell ? rich(ctx, cell) : "\u2013", {
+        x: colX(i) + (i ? 0.14 : 0),
+        y: y + 0.05,
+        w: i ? colW - 0.28 : firstW - 0.1,
+        h: rowH - 0.1,
+        fontFace: ctx.fonts.body,
+        bold: i === 0,
+        color: i === 0 ? ctx.colors.accent2 : cell ? ctx.colors.text : ctx.colors.muted,
+        fontSize: i === 0 ? 14 : 12,
+        valign: "middle",
+        fit: "shrink"
+      });
+    });
+  });
+}
+function renderFootnotes(slide, ctx, data) {
+  const source = typeof data.source === "string" ? data.source.trim() : "";
+  const disclaimer = typeof data.disclaimer === "string" ? data.disclaimer.trim() : "";
+  if (!source && !disclaimer)
+    return;
+  const y = ctx.height - ctx.margin * 0.8;
+  const half = (ctx.width - ctx.margin * 2) / 2;
+  if (source) {
+    slide.addText(/^source/i.test(source) ? source : `Source: ${source}`, {
+      x: ctx.margin,
+      y,
+      w: disclaimer ? half : half * 2,
+      h: 0.28,
+      fontFace: ctx.fonts.body,
+      color: ctx.colors.muted,
+      fontSize: 9,
+      valign: "middle",
+      fit: "shrink"
+    });
+  }
+  if (disclaimer) {
+    slide.addText(disclaimer, {
+      x: ctx.margin + half,
+      y,
+      w: half,
+      h: 0.28,
+      fontFace: ctx.fonts.body,
+      italic: true,
+      color: ctx.colors.muted,
+      fontSize: 9,
+      align: "right",
+      valign: "middle",
+      fit: "shrink"
+    });
+  }
 }
 function renderDataTable(slide, ctx, data) {
   const top = renderHeaderBlock(slide, ctx, data, false);
@@ -24657,7 +25152,7 @@ function renderTimeline(slide, ctx, data) {
         fit: "shrink"
       });
       if (step.body) {
-        slide.addText(step.body, {
+        slide.addText(rich(ctx, step.body), {
           x: textX,
           y: y + 0.4,
           w: textW,
@@ -24674,7 +25169,10 @@ function renderTimeline(slide, ctx, data) {
   }
   const areaW = ctx.width - ctx.margin * 2;
   const cellW = areaW / steps.length;
-  const railY = areaY + 0.18;
+  const bodyBoxH = Math.max(0.6, areaH - badge - 0.9);
+  const stepSize = Math.min(...steps.map((s) => s.body ? fitFontSize(s.body, cellW - 0.15, bodyBoxH, 14, 16) : 16));
+  const usedH = badge + 0.65 + Math.max(...steps.map((s) => s.body ? textHeight(s.body, cellW - 0.15, stepSize) : 0));
+  const railY = areaY + 0.18 + Math.max(0, (areaH - 0.18 - usedH) / 2 - 0.2);
   if (steps.length > 1) {
     slide.addShape(ctx.shapeRoundRect, {
       x: ctx.margin + cellW * 0.15,
@@ -24721,14 +25219,14 @@ function renderTimeline(slide, ctx, data) {
       fit: "shrink"
     });
     if (step.body) {
-      slide.addText(step.body, {
+      slide.addText(rich(ctx, step.body), {
         x,
         y: railY + badge + 0.65,
         w: cellW - 0.15,
-        h: Math.max(0.6, areaH - badge - 0.9),
+        h: Math.max(0.6, areaY + areaH - (railY + badge + 0.65)),
         fontFace: ctx.fonts.body,
         color: ctx.colors.muted,
-        fontSize: 12,
+        fontSize: stepSize,
         valign: "top",
         fit: "shrink"
       });
@@ -24836,7 +25334,7 @@ function renderComparison(slide, ctx, data) {
       innerY += 0.45;
     }
     if (text) {
-      slide.addText(text, {
+      slide.addText(rich(ctx, text), {
         x: x + 0.2,
         y: innerY,
         w: colW - 0.4,
@@ -25430,6 +25928,12 @@ var RENDERERS = {
   section: renderSection,
   "two-column": renderTwoColumn,
   "feature-grid": renderFeatureGrid,
+  "at-a-glance": renderAtAGlance,
+  options: renderOptions,
+  innovation: renderInnovation,
+  "numbered-rows": renderNumberedRows,
+  "stat-story": renderStatStory,
+  "campaign-matrix": renderCampaignMatrix,
   "data-table": renderDataTable,
   "stat-row": renderStatRow,
   timeline: renderTimeline,
@@ -29504,6 +30008,37 @@ function renderSlide(slide, ctx, data) {
     return;
   }
   renderer(slide, ctx, data);
+  renderFootnotes(slide, ctx, data);
+  if (data.htIp && data.layout !== "title")
+    renderIpBadge(slide, ctx);
+}
+function renderIpBadge(slide, ctx) {
+  const w = 1.25;
+  const h = 0.28;
+  const x = ctx.width - ctx.margin - w;
+  const y = Math.max(0.12, ctx.margin * 0.5 - h / 2);
+  slide.addShape(ctx.shapeRoundRect, {
+    x,
+    y,
+    w,
+    h,
+    rectRadius: 0.14,
+    fill: { color: ctx.colors.accent },
+    line: { color: ctx.colors.accent, width: 0 }
+  });
+  slide.addText("HT MEDIA IP", {
+    x,
+    y,
+    w,
+    h,
+    fontFace: ctx.fonts.body,
+    bold: true,
+    color: ctx.colors.bg,
+    fontSize: 9,
+    align: "center",
+    valign: "middle",
+    charSpacing: 1
+  });
 }
 
 // ../presentation-md/packages/export/dist/prefetch-images.js
@@ -30088,7 +30623,7 @@ var server = createServer(async (req, res) => {
     const ms = Date.now() - started;
     const event = out.status === 200 ? "render.done" : "render.rejected";
     const severity = out.status === 200 ? "INFO" : "WARNING";
-    const problems = out.status === 200 ? undefined : out.body.details;
+    const problems = out.status === 200 ? void 0 : out.body.details;
     console.log(JSON.stringify({ severity, message: `${event} status=${out.status} ms=${ms}`, event, status: out.status, ms, problems }));
     return out.status === 200 ? send(res, 200, out.body, PPTX_MIME) : send(res, out.status, out.body);
   } catch (err) {

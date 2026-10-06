@@ -51,13 +51,13 @@ def _metric(name, threshold):
     return EvalMetric(metric_name=name, threshold=threshold)
 
 
-def test_a_published_deck_with_logo_and_three_images_passes_the_gate():
+def test_a_published_deck_with_logo_and_enough_images_passes_the_gate():
     result = metrics.deck_quality_gate(_metric("deck_quality_gate", 1.0), [_run(_build())])
     assert result.overall_score == 1.0 and result.overall_eval_status == EvalStatus.PASSED
 
 
 @pytest.mark.parametrize("build, score", [
-    (_build(generated=2), 0.5),
+    (_build(generated=0), 0.5),  # fewer pictures than the deck's length needs
     (_build(ht_logo=False, generated=0), 0.0),
     (_build(link=False), 0.0),  # rejected, never published
 ])

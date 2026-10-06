@@ -432,3 +432,11 @@ def test_an_unexpected_failure_adding_pictures_still_publishes_the_deck():
     render.assert_called_once()
     assert result["link"] == "L"
     assert "pictures_error" in result
+
+
+def test_a_generated_picture_carries_the_representation_note():
+    deck = _deck()
+    with patch.object(visuals, "generate_image", return_value="data:image/jpeg;base64,NEW"):
+        visuals.fill_images(deck)
+    pictured = [s for s in deck["slides"] if s.get("image") == "data:image/jpeg;base64,NEW"]
+    assert pictured and all(s["disclaimer"] == visuals.GENERATED_NOTE for s in pictured)

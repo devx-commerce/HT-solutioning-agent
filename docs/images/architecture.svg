@@ -150,9 +150,9 @@
         <text class="s" x="352" y="773">Reads a page, only on a site already</text>
         <text class="s" x="352" y="787">named in the email or a result</text>
         <rect class="bx" x="620" y="528" width="300" height="56" rx="4"/>
-        <text class="t" x="632" y="547">Vertex AI Search · Drive connector</text>
-        <text class="m" x="632" y="563">ht-sales-pitch-agent · answer_query</text>
-        <text class="s" x="632" y="577">"Past Pitch Decks" folder, allow-listed</text>
+        <text class="t" x="632" y="547">Past-deck index · BigQuery</text>
+        <text class="m" x="632" y="563">past_deck_slides · refreshed daily</text>
+        <text class="s" x="632" y="577">"Past Pitch Decks" folder, read in full</text>
         <rect class="bx" x="620" y="598" width="300" height="56" rx="4"/>
         <text class="t" x="632" y="617">Gemini with Google Search</text>
         <text class="s" x="632" y="633">Every claim kept only with a resolved,</text>
@@ -195,10 +195,10 @@
         <rect class="bx" x="20" y="876" width="230" height="140" rx="4"/>
         <text class="t" x="32" y="896">HT master deck rules</text>
         <text class="s" x="32" y="913">Fixed spine (cover, brief, …,</text>
-        <text class="s" x="32" y="929">next steps, closing), 7 to 20</text>
+        <text class="s" x="32" y="929">why this works, closing), 7 to 40</text>
         <text class="s" x="32" y="945">slides, approved layouts and text</text>
-        <text class="s" x="32" y="961">limits, no em dashes, at least 3</text>
-        <text class="s" x="32" y="977">pictures in a new deck. A deck</text>
+        <text class="s" x="32" y="961">limits, no em dashes, a picture</text>
+        <text class="s" x="32" y="977">per 2 to 3 slides. A deck</text>
         <text class="s" x="32" y="993">that breaks one goes back to the</text>
         <text class="s" x="32" y="1009">agent with the exact problems.</text>
         <rect class="bx" x="280" y="876" width="270" height="140" rx="4"/>

@@ -17,6 +17,25 @@ from agents.solutioning_agent.tools import deck as deck_tools
 from agents.solutioning_agent.tools import master_deck, why_ht
 
 
+def _component_slides(name, detail="options"):
+    """The depth a first draft needs for each component on the overview."""
+    if detail == "numbered-rows":
+        return _component_slides(name)[::2] + [
+            {"layout": "numbered-rows", "eyebrow": name, "heading": f"The {name} series",
+             "cards": [{"title": "One", "body": "First"}, {"title": "Two", "body": "Second"},
+                       {"title": "Three", "body": "Third"}]}]
+    return [
+        {"layout": "at-a-glance", "eyebrow": name, "heading": f"{name} at a glance",
+         "image": "placeholder", "imageAlt": f"A mock-up of the {name} feature",
+         "facts": [{"label": "Platform", "value": "HT"}, {"label": "Format", "value": "Page"},
+                   {"label": "Frequency", "value": "Weekly"}, {"label": "Geography", "value": "Delhi NCR"}]},
+        {"layout": "options", "eyebrow": name, "heading": f"Two ways to run {name}",
+         "cards": [{"title": "Option one", "body": "- Fast"}, {"title": "Option two", "body": "- Wide"}]},
+        {"layout": "comparison", "eyebrow": name, "heading": f"How {name} works",
+         "leftLabel": "Today", "rightLabel": "With HT", "left": "- Ads", "right": "- Moments"},
+    ]
+
+
 def _deck(**overrides):
     deck = {
         "type": "deck",
@@ -33,6 +52,7 @@ def _deck(**overrides):
              "image": "placeholder", "imageAlt": "A canopy"},
             {"layout": "two-column", "heading": "Pillar 2", "body": "Kiranas.",
              "image": "placeholder", "imageAlt": "A kirana counter"},
+            *_component_slides("Print"), *_component_slides("Digital"), *_component_slides("On-ground", "numbered-rows"),
             {"layout": "two-column", "heading": "Next steps", "body": "Costing from HT's pricing team.",
              "aside": "Commercials from HT's pricing team."},
             {"layout": "closing", "heading": "Thank you"},
@@ -50,20 +70,20 @@ def test_a_deck_on_the_spine_passes_and_is_forced_onto_the_ht_theme():
 
 def test_overlong_text_is_rejected_with_the_field_named_never_truncated():
     deck = _deck()
-    long_body = "word " * 120
+    long_body = "word " * 150
     deck["slides"][1]["body"] = long_body
     problems = master_deck.enforce(deck)
-    assert any("slide 1 (two-column): body is 600 characters; the limit is 420" in p for p in problems)
+    assert any("slide 1 (two-column): body is 750 characters; the limit is 600" in p for p in problems)
     assert deck["slides"][1]["body"] == long_body
 
 
 def test_list_items_are_bounded_in_count_and_length():
     deck = _deck()
     deck["slides"][3]["cards"] = [{"title": f"Card {i}"} for i in range(7)]
-    deck["slides"][4]["steps"][0]["body"] = "x" * 121
+    deck["slides"][4]["steps"][0]["body"] = "x" * 171
     problems = master_deck.enforce(deck)
     assert any("cards has 7; it must have 2–6" in p for p in problems)
-    assert any("steps[0].body is 121 characters" in p for p in problems)
+    assert any("steps[0].body is 171 characters" in p for p in problems)
 
 
 @pytest.mark.parametrize("layout", ["chart", "custom-html", "code", "metric-ring", "ranked-list"])
@@ -86,17 +106,17 @@ def test_the_spine_is_enforced_at_both_ends():
 def test_slide_count_is_bounded():
     deck = _deck()
     deck["slides"] = deck["slides"][:2] + deck["slides"][-1:]
-    assert any("must have 7–20" in p for p in master_deck.enforce(deck))
+    assert any("must have 7–40" in p for p in master_deck.enforce(deck))
 
 
-def test_twenty_own_slides_pass_and_twenty_one_do_not():
+def test_forty_own_slides_pass_and_forty_one_do_not():
     deck = _deck()
     filler = {"layout": "quote", "quote": "One more idea."}
-    deck["slides"] = deck["slides"][:-2] + [dict(filler) for _ in range(20 - len(deck["slides"]))] + deck["slides"][-2:]
-    assert len(deck["slides"]) == 20
+    deck["slides"] = deck["slides"][:-2] + [dict(filler) for _ in range(40 - len(deck["slides"]))] + deck["slides"][-2:]
+    assert len(deck["slides"]) == 40
     assert master_deck.enforce(deck) == []
     deck["slides"].insert(3, dict(filler))
-    assert any("must have 7–20" in p for p in master_deck.enforce(deck))
+    assert any("must have 7–40" in p for p in master_deck.enforce(deck))
 
 
 def test_an_image_the_model_cannot_supply_becomes_a_captioned_placeholder():
@@ -120,13 +140,19 @@ def test_placeholder_captions_do_not_stack_on_re_enforcement():
     assert deck["slides"][2]["imageAlt"] == "Image placeholder (12:13): Kirana counter"
 
 
-def test_brief_and_next_steps_slides_make_their_point_in_an_aside_not_an_image():
+def test_the_brief_slide_makes_its_point_in_an_aside_not_an_image():
+    deck = _deck()
+    deck["slides"][1].update(image="placeholder", imageAlt="Calendar")
+    deck["slides"][1].pop("aside", None)
+    assert any("slide 1 (brief) must use an aside" in p for p in master_deck.enforce(deck))
+
+
+def test_the_slide_before_closing_may_take_a_picture_now_there_is_no_next_steps_slide():
     deck = _deck()
     nxt = len(deck["slides"]) - 2
-    deck["slides"][nxt].update(image="placeholder", imageAlt="Calendar")
+    deck["slides"][nxt].update(image="placeholder", imageAlt="Families at a campsite")
     deck["slides"][nxt].pop("aside", None)
-    problems = master_deck.enforce(deck)
-    assert any(f"slide {nxt} (next-steps) must use an aside" in p for p in problems)
+    assert master_deck.enforce(deck) == []
 
 
 @pytest.mark.parametrize("cols", [5, 1, "3", "bento", ["a", "b"], True])
@@ -182,13 +208,34 @@ def test_quote_marks_the_layout_draws_itself_are_stripped():
     assert deck["slides"][2]["quote"] == "Asli swad, ab ₹10 mein"
 
 
-def test_a_stat_row_without_a_source_is_rejected():
+def test_a_stat_row_needs_its_source_as_small_print():
     deck = _deck()
     deck["slides"][2] = {"layout": "stat-row", "heading": "Why now",
-                         "stats": [{"value": "100%", "label": "Purity"}, {"value": "4", "label": "Hubs"}]}
-    assert any("needs its source in lead" in p for p in master_deck.enforce(deck))
-    deck["slides"][2]["lead"] = "Source: Tata Consumer annual report 2024."
+                         "stats": [{"value": "38%", "label": "Spend more on beauty"}, {"value": "70%", "label": "Shop in store"}]}
+    assert any("give the figures' source in source" in p for p in master_deck.first_draft_problems(deck))
+    deck["slides"][2]["source"] = "LocalCircles survey 2025"
+    assert not any("source" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_a_source_written_in_the_lead_moves_to_the_small_print():
+    """Decks built before the source field carried it in lead; they stay editable."""
+    deck = _deck()
+    deck["slides"][2] = {"layout": "stat-row", "heading": "Why now", "lead": "Source: IRS 2019.",
+                         "stats": [{"value": "8.6M", "label": "Readers"}, {"value": "#1", "label": "In Delhi"}]}
     assert master_deck.enforce(deck) == []
+    assert deck["slides"][2]["source"] == "IRS 2019." and "lead" not in deck["slides"][2]
+
+
+@pytest.mark.parametrize("text", [
+    "Source: HT PACE deck 2025",
+    "According to the Lavie proposal, 20 colleges took part.",
+    "Built on prior HT work for Sensodyne.",
+    "As our past decks show, schools respond.",
+])
+def test_slide_copy_never_talks_about_sources_or_past_decks(text):
+    deck = _deck()
+    deck["slides"][6]["body"] = text
+    assert any("talk about sources" in p for p in master_deck.first_draft_problems(deck))
 
 
 def test_the_agent_instruction_is_generated_from_the_enforced_limits():
@@ -219,7 +266,7 @@ def test_why_ht_figures_are_the_fixed_library_not_generated():
     slides, _ = why_ht.slides_for(["hindi-heartland"])
     heartland = slides[-1]
     assert [s["value"] for s in heartland["stats"]] == ["50 MN", "#1", "#1", "4X"]
-    assert heartland["lead"].startswith("Sources: IRS 2019")
+    assert heartland["source"].startswith("IRS 2019") and "lead" not in heartland
 
 
 def test_why_ht_goes_straight_after_the_brief_and_replaces_itself():
@@ -333,17 +380,35 @@ def test_a_card_title_that_would_wrap_in_three_columns_is_rejected_on_a_first_dr
     assert any("title must fit one line" in p and "limit is 26" in p for p in problems)
     deck["slides"][3] = _grid(4, 2, title="Interactive Commute Dashboard")
     master_deck.enforce(deck)
-    assert master_deck.first_draft_problems(deck) == []
+    assert not any("title must fit one line" in p for p in master_deck.first_draft_problems(deck))
 
 
-def test_a_first_draft_needs_three_pictured_slides():
+def test_pictures_scale_with_the_deck_one_per_three_to_one_per_two_content_slides():
+    deck = _deck()  # 17 content slides: title and closing don't count
+    assert master_deck.picture_range(deck) == (6, 8)
+    deck["slides"] = deck["slides"] * 3  # 42 content slides, but never past the cap
+    assert master_deck.picture_range(deck) == (master_deck.MAX_IMAGES, master_deck.MAX_IMAGES)
+
+
+def test_a_first_draft_needs_a_picture_for_every_three_content_slides():
     deck = _deck()
     master_deck.enforce(deck)
     assert master_deck.first_draft_problems(deck) == []
-    deck["slides"][7].pop("image")
-    deck["slides"][7]["aside"] = "Kiranas."
+    for i in (7, 6):
+        deck["slides"][i].pop("image")
+        deck["slides"][i]["aside"] = "Kiranas."
     problems = master_deck.first_draft_problems(deck)
-    assert any("2 slides with an image" in p and "at least 3" in p for p in problems)
+    assert any("4 slides with a picture" in p and "at least 6" in p for p in problems)
+
+
+def test_a_first_draft_may_not_picture_more_than_every_other_slide():
+    deck = _deck()
+    for i in (1, 17):
+        deck["slides"][i]["image"] = "placeholder"
+        deck["slides"][i]["imageAlt"] = "A crowded market"
+    deck["slides"][2] = {"layout": "image-hero", "heading": "The idea", "imageAlt": "A crowded market"}
+    master_deck.enforce(deck)
+    assert any("9 slides with a picture; at most 8" in p for p in master_deck.first_draft_problems(deck))
 
 
 def test_why_ht_logo_slots_do_not_count_toward_the_image_minimum():
@@ -353,16 +418,56 @@ def test_why_ht_logo_slots_do_not_count_toward_the_image_minimum():
         deck["slides"][i]["aside"] = "x"
     why_ht.insert(deck, [])
     master_deck.enforce(deck)
-    assert any("1 slides with an image" in p for p in master_deck.first_draft_problems(deck))
+    assert any("4 slides with a picture" in p for p in master_deck.first_draft_problems(deck))
 
 
 def test_build_rejects_a_first_draft_short_of_images_before_rendering():
     deck = _deck()
     deck["slides"] = [s for s in deck["slides"] if s.get("layout") != "image-hero"]
+    deck["slides"][6].pop("image")
+    deck["slides"][6]["aside"] = "x"
     with patch.object(deck_tools, "_render_pptx") as render:
         result = deck_tools.build_solution_deck(json.dumps(deck), "Acme", "b1")
     render.assert_not_called()
-    assert any("at least 3" in p for p in result["problems"])
+    assert any("at least 6" in p for p in result["problems"])
+
+
+def test_at_most_two_highlights_a_slide():
+    deck = _deck()
+    deck["slides"][17]["body"] = "- ==One== and ==two==\n- and ==three=="
+    problems = master_deck.first_draft_problems(deck)
+    assert any("slide 17" in p and "3 ==highlights==" in p for p in problems)
+
+
+def test_named_lists_may_use_labels_on_any_slide():
+    deck = _deck()
+    for i in (1, 6, 7, 17):
+        deck["slides"][i]["body"] = "- **Reach:** Delhi\n- **Format:** Page\n- **When:** Diwali"
+    assert master_deck.first_draft_problems(deck) == []
+
+
+@pytest.mark.parametrize("slide", [
+    {"layout": "innovation", "eyebrow": "Print", "heading": "The smooth switch",
+     "imageAlt": "A flap jacket on HT's front page",
+     "facts": [{"label": "Idea", "value": "A flap reveals the bike."}, {"label": "How it works", "value": "Lift the flap."},
+               {"label": "Why it works", "value": "Readers touch it."}]},
+    {"layout": "numbered-rows", "heading": "Off the Field", "lead": "5 episodes · fortnightly · HT YouTube",
+     "cards": [{"title": "The gully that made me", "body": "Childhood memory"},
+               {"title": "The family stand", "body": "The people behind the player"},
+               {"title": "Beyond cricket", "body": "Life past the boundary"}]},
+    {"layout": "stat-story", "heading": "Gully cricket meets the big league",
+     "stats": [{"value": "100-120", "label": "RWAs across Delhi (indicative)"}],
+     "body": "A city-wide community league with zonal finals."},
+    {"layout": "campaign-matrix", "heading": "The plan at a glance",
+     "columns": ["Channel", "Weeks 1-6", "Weeks 7-11"],
+     "rows": [["Print", "Launch spread", "Finale wrap"], ["Radio", "Season promos", ""], ["On-ground", "", "Mall zones"]]},
+])
+def test_the_new_layouts_are_approved_and_checked(slide):
+    deck = _deck()
+    deck["slides"][7] = slide
+    assert master_deck.enforce(deck) == []
+    if slide["layout"] == "innovation":
+        assert deck["slides"][7]["image"].startswith(master_deck.PLACEHOLDER_PREFIX)
 
 
 def test_a_revision_of_a_deck_with_no_images_is_still_allowed():
@@ -394,3 +499,72 @@ def test_a_caption_over_the_limit_is_still_rejected():
     deck = _deck()
     deck["slides"][6]["imageAlt"] = "x" * 141
     assert any("imageAlt is 141 characters" in p for p in master_deck.enforce(deck))
+
+
+def test_a_first_draft_rejects_a_paragraph_but_accepts_the_same_words_as_points():
+    deck = _deck()
+    deck["slides"][6]["body"] = " ".join(["word"] * 40)
+    master_deck.enforce(deck)
+    assert any("40-word paragraph" in p for p in master_deck.first_draft_problems(deck))
+    deck["slides"][6]["body"] = "\n".join("- " + " ".join(["word"] * 10) for _ in range(4))
+    assert not any("paragraph" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_a_first_draft_cannot_lean_on_two_column():
+    deck = _deck()
+    extra = {"layout": "two-column", "heading": "More", "body": "- x", "aside": "y"}
+    deck["slides"][-2:-2] = [dict(extra) for _ in range(4)]
+    master_deck.enforce(deck)
+    assert any("are two-column; at most" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_each_component_needs_three_slides_including_an_at_a_glance():
+    deck = _deck()
+    deck["slides"] = [s for s in deck["slides"] if not (s.get("eyebrow") == "Digital" and s["layout"] == "options")]
+    deck["slides"] = [s for s in deck["slides"] if not (s.get("eyebrow") == "Print" and s["layout"] == "at-a-glance")]
+    deck["slides"].insert(-2, {"layout": "comparison", "eyebrow": "Print", "heading": "x", "left": "a", "right": "b"})
+    master_deck.enforce(deck)
+    problems = master_deck.first_draft_problems(deck)
+    assert any('"Digital" has 2 slide' in p for p in problems)
+    assert any('"Print" has no at-a-glance' in p for p in problems)
+    assert not any('"On-ground"' in p for p in problems)
+
+
+def test_a_two_column_slide_never_leaves_its_right_half_empty():
+    deck = _deck()
+    deck["slides"][6].pop("image")
+    assert any("right half would be empty" in p for p in master_deck.enforce(deck))
+
+
+def test_components_may_not_all_be_told_in_the_same_slides():
+    deck = _deck()
+    assert not any("all use the same slides" in p for p in master_deck.first_draft_problems(deck))
+    deck["slides"] = [s for s in deck["slides"] if s.get("eyebrow") != "On-ground" or s["layout"] == "at-a-glance"]
+    at = next(i for i, s in enumerate(deck["slides"]) if s.get("eyebrow") == "On-ground") + 1
+    deck["slides"][at:at] = _component_slides("On-ground")[1:]
+    assert any("all use the same slides" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_a_source_may_not_be_one_of_hts_own_past_pitches():
+    deck = _deck()
+    deck["slides"][2] = {"layout": "stat-row", "heading": "Scale", "source": "HT PACE campaign proposals",
+                         "stats": [{"value": "2,000+", "label": "Schools"}, {"value": "5L+", "label": "Students"}]}
+    assert any("source talk about sources" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_grid_cards_never_hold_label_value_lines():
+    deck = _deck()
+    deck["slides"][3]["cards"][0]["body"] = "**Student Reach:** 12 half-page features.\n\n**Gateways:** School heads."
+    assert any("feature-grid): cards 0 use" in p for p in master_deck.first_draft_problems(deck))
+    deck["slides"][3]["cards"][0]["body"] = "Twelve half-page features in the HT PACE School Edition."
+    assert not any("feature-grid): cards" in p for p in master_deck.first_draft_problems(deck))
+
+
+def test_an_ht_ip_carries_its_badge_on_every_one_of_its_slides():
+    deck = _deck()
+    for s in deck["slides"]:
+        if s.get("eyebrow") == "Print":
+            s["htIp"] = True
+    assert not any("HT IP on some" in p for p in master_deck.first_draft_problems(deck))
+    next(s for s in deck["slides"] if s.get("eyebrow") == "Print").pop("htIp")
+    assert any('"Print" is an HT IP on some of its slides' in p for p in master_deck.first_draft_problems(deck))

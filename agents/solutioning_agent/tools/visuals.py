@@ -51,12 +51,15 @@ _NOT_THE_LOGO = re.compile(
     r"background|banner|wall|hero|partner|client|award|sponsor|footer-bg|\bbg\b"
 )
 
-# Generated images live inside the stored Deck JSON, which is written to
-# BigQuery as one query parameter (10 MB request limit). Past this budget the
-# remaining slots stay placeholders rather than risk failing the save.
-_IMAGE_BUDGET_CHARS = 6_000_000
-_MAX_IMAGES_PER_DECK = 10
-_IMAGE_WORKERS = 4
+# Generated images travel inside the Deck JSON sent to the renderer (Cloud
+# Run takes up to 32 MB a request); they are saved to Cloud Storage, not
+# BigQuery. Past this budget the remaining slots stay placeholders rather
+# than risk a failed render. At ~0.5 MB a JPEG it fits master_deck.MAX_IMAGES.
+_IMAGE_BUDGET_CHARS = 12_000_000
+_IMAGE_WORKERS = 6
+# Small print on every slide with a generated picture, as HT's own decks
+# carry on their mock-ups: the picture shows the idea, not a final creative.
+GENERATED_NOTE = "Visuals are for representation only."
 
 # Supported ratios the slots map to; the 12:13 two-column frame takes a
 # square and the renderer crops it to fill.
@@ -422,7 +425,15 @@ def fill_images(deck: dict, only=None) -> dict:
     slots = _placeholder_slots(deck, only)
     if not slots:
         return {"generated": 0, "placeholders": 0}
-    todo = slots[:_MAX_IMAGES_PER_DECK]
+    # A deck never holds more than MAX_IMAGES pictures in all, which also
+    # bounds what one build or revision spends on generating them.
+    existing = sum(
+        1 for s in deck.get("slides") or []
+        if isinstance(s, dict) and isinstance(s.get("image"), str)
+        and not s["image"].startswith(master_deck.PLACEHOLDER_PREFIX)
+        and not str(s.get("notes", "")).startswith("[why-ht:")
+    )
+    todo = slots[:max(0, master_deck.MAX_IMAGES - existing)]
     with concurrent.futures.ThreadPoolExecutor(max_workers=_IMAGE_WORKERS) as pool:
         results = list(pool.map(lambda s: generate_image(s[2], s[1]), todo))
 
@@ -432,6 +443,7 @@ def fill_images(deck: dict, only=None) -> dict:
         if not uri or len(uri) > budget:
             continue
         slide["image"] = uri
+        slide["disclaimer"] = GENERATED_NOTE
         slide["imageAlt"] = description
         budget -= len(uri)
         generated += 1

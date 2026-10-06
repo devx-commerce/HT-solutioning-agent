@@ -10,7 +10,7 @@ words, for example:
 
 ```
 config.yaml has problems; nothing was deployed:
-  - max_slides: must be a whole number from 7 to 30 (found 50).
+  - max_slides: must be a whole number from 7 to 50 (found 60).
   - onboarding_domains: must be a list of domains like hindustantimes.com, without @ (found ['@htdigital.in']).
 ```
 
@@ -26,14 +26,16 @@ config.yaml has problems; nothing was deployed:
 | `usage_report_schedule` | `0 9 * * 1` | When the weekly usage email goes out (cron, India time; Mondays 09:00). |
 | `sweep_schedule` | `*/5 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
 | `new_inbox_lookback_hours` | 24 | How far back a newly connected inbox is read on its first check (0 to 168). 0 reads only mail arriving from then on. |
-| `max_slides` | 20 | Longest deck the agent may build (7 to 30). |
-| `min_images` | 3 | Pictures a new deck must have (0 to 10). Existing decks stay editable whatever this is. |
+| `max_slides` | 40 | Longest deck the agent may build (7 to 50). |
+| `max_images` | 13 | Most pictures a deck may have (0 to 20). A new deck has one picture for every two to three content slides, up to this. Existing decks stay editable whatever this is. |
 | `models.agent` | gemini-3.8-flash | Plans research, drafts and revises decks. |
 | `models.research` | gemini-3.8-flash | Web research with Google Search. |
 | `models.classify` | gemini-2.5-flash-lite | Decides whether an email is a brief. |
 | `models.images` | gemini-2.5-flash-image | Generates slide pictures. |
 | `deck_folder_id` | "Agent Generated Decks" | Drive folder new decks are created in. |
 | `past_decks_folder_ids` | "Past Pitch Decks" | Folders the agent may cite as HT's past work. |
+| `past_decks_source` | bigquery | Where the agent searches past decks: `bigquery` (the past-deck index) or `vertex` (the Gemini Enterprise Drive connector). |
+| `past_decks_refresh_schedule` | `0 6 * * *` | When the past-deck index refreshes (cron, India time; daily 06:00). |
 | `ht_assets_folder_id` | HT brand assets | Folder holding the HT logo (any image with "logo" in its name). |
 | `briefs_sheet_id` | The briefs sheet | Sheet that gets one row per brief from email. |
 | `evals.after_deploy` | none | Evals after each deploy: `none`, `smoke` (about 15 minutes) or `full` (about an hour). Otherwise evals run only when started by hand. |

@@ -64,8 +64,10 @@ def problems(cfg: dict) -> list[str]:
     need(s, "sweep_schedule", lambda v: bool(_CRON.match(str(v))), "must be a cron schedule like \"*/30 * * * *\"")
     need(s, "new_inbox_lookback_hours", lambda v: type(v) is int and 0 <= v <= 168,
          "must be a whole number of hours from 0 to 168")
-    need(s, "max_slides", lambda v: isinstance(v, int) and 7 <= v <= 30, "must be a whole number from 7 to 30")
-    need(s, "min_images", lambda v: isinstance(v, int) and 0 <= v <= 10, "must be a whole number from 0 to 10")
+    need(s, "max_slides", lambda v: isinstance(v, int) and 7 <= v <= 50, "must be a whole number from 7 to 50")
+    need(s, "max_images", lambda v: type(v) is int and 0 <= v <= 20, "must be a whole number from 0 to 20")
+    need(s, "past_decks_source", lambda v: v in ("bigquery", "vertex"), 'must be "bigquery" or "vertex"')
+    need(s, "past_decks_refresh_schedule", lambda v: bool(_CRON.match(str(v))), 'must be a cron schedule like "0 6 * * *"')
     models = s.get("models") or {}
     for key in ("agent", "research", "classify", "images"):
         need(models, key, lambda v: str(v).startswith("gemini-"), f"models.{key} must be a Gemini model name")
@@ -109,6 +111,12 @@ def _secret_value(i: dict, name: str) -> str:
     return client.access_secret_version(name=path).payload.data.decode("utf-8").strip()
 
 
+def past_decks_table(i: dict) -> str:
+    """The past-deck index: always the live dataset, evals included, since
+    it holds HT's past decks rather than anything a run writes."""
+    return f'{i["project_id"]}.{i["bigquery_dataset"]}.past_deck_slides'
+
+
 def agent_env(cfg: dict, youtube_key: str) -> dict[str, str]:
     s, i = cfg["settings"], cfg["infrastructure"]
     return {
@@ -126,13 +134,15 @@ def agent_env(cfg: dict, youtube_key: str) -> dict[str, str]:
         "DECK_FOLDER_ID": s["deck_folder_id"],
         "DECK_READER_DOMAIN": ",".join(s["deck_reader_domains"]),
         "PAST_DECKS_FOLDER_ID": ",".join(s["past_decks_folder_ids"]),
+        "PAST_DECKS_SOURCE": s["past_decks_source"],
+        "PAST_DECKS_TABLE": past_decks_table(i),
         "PAST_DECKS_ENGINE": i["past_decks_engine"],
         "PAST_DECKS_LOCATION": i["past_decks_location"],
         "HT_ASSETS_FOLDER_ID": s["ht_assets_folder_id"],
         "COMPETITOR_OUTLETS": json.dumps(s["competitor_outlets"], ensure_ascii=False),
         "DECK_IMAGES_BUCKET": i["deck_images_bucket"],
         "MAX_SLIDES": str(s["max_slides"]),
-        "MIN_IMAGES": str(s["min_images"]),
+        "MAX_IMAGES": str(s["max_images"]),
         "YOUTUBE_API_KEY": youtube_key,
     }
 
@@ -201,6 +211,7 @@ def deploy_env(cfg: dict) -> dict[str, str]:
         "SECRET_NAMES": " ".join(i["secrets"].values()),
         "EVAL_SUMMARY_EMAIL": s["eval_summary_email"],
         "USAGE_REPORT_SCHEDULE": s["usage_report_schedule"],
+        "PAST_DECKS_REFRESH_SCHEDULE": s["past_decks_refresh_schedule"],
         "EVALS_AFTER_DEPLOY": s["evals"]["after_deploy"],
         "SMOKE_CASES": ",".join(s["evals"]["smoke_cases"]),
     }

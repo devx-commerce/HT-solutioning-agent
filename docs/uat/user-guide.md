@@ -63,7 +63,14 @@ When it finds a brief:
      named ("On the Decathlon deck (brief 1a10…), change "). Finish the
      sentence and send;
      see [Using chat](#using-chat-in-gemini-enterprise) for what you can ask;
-   - the evidence it found, each point with a link to its source;
+   - **Ideas in the deck:** each part of the deck by its name in the deck,
+     with what came from HT's past decks (and which deck) and what is new
+     for this client. Search the email for an idea's name to see where it
+     came from;
+   - what it found, grouped by where it came from (HT's past decks, the web
+     and social, YouTube, the client's website), each point ending with a
+     link named after its source: the website, "HT past deck: <name>" or
+     "YouTube";
    - which sources it checked and which returned nothing;
    - the gaps: things it could not establish and you should check.
 
@@ -95,10 +102,12 @@ original. This keeps the agent's later revisions from overwriting your work.
   activations (on-ground events, contests, mystery shopper programmes and so
   on) get concrete detail: cities, scale, timing, how it runs, how it's
   reported.
-- A plan or timeline, a deliverables table, and next steps.
+- A plan by phase, and why the plan suits the client.
 
 Figures the agent estimated rather than found are marked **(indicative)**.
-Figures it found carry their source. It never states prices.
+Figures from research show their source in small print at the foot of the
+slide, and generated pictures are marked as for representation only. Decks
+never mention prices.
 
 ## Using chat in Gemini Enterprise
 

@@ -69,7 +69,7 @@ _SLIDES: dict[str, dict] = {
             {"value": "281M+", "label": "Monthly visits across the HT Group's digital network"},
             {"value": "547M+", "label": "Monthly page views across the network"},
         ],
-        "lead": "Sources: HT Media; Comscore MMX Multi-Platform, India, Dec 2025.",
+        "source": "HT Media; Comscore MMX Multi-Platform, India, Dec 2025.",
     },
     "english-print": {
         "layout": "stat-row",
@@ -81,7 +81,7 @@ _SLIDES: dict[str, dict] = {
             {"value": "85%", "label": "Of HT readers from NCCS A households"},
             {"value": "75%+", "label": "Of HT readers in Delhi + Mumbai don't read TOI"},
         ],
-        "lead": "Sources: IRS Q4 2019 (readership, NCCS A); UMVS 2025 (exclusivity).",
+        "source": "IRS Q4 2019 (readership, NCCS A); UMVS 2025 (exclusivity).",
     },
     "hindi-heartland": {
         "layout": "stat-row",
@@ -93,7 +93,7 @@ _SLIDES: dict[str, dict] = {
             {"value": "#1", "label": "Hindi site by video views (Live Hindustan)"},
             {"value": "4X", "label": "Response from Hindustan readers vs competitors"},
         ],
-        "lead": "Sources: IRS 2019 (readership, rank); HT Media (video views, reader response).",
+        "source": "IRS 2019 (readership, rank); HT Media (video views, reader response).",
     },
     "digital": {
         "layout": "stat-row",
@@ -105,7 +105,7 @@ _SLIDES: dict[str, dict] = {
             {"value": "44M", "label": "Monthly visitors on LiveMint"},
             {"value": "8.69M", "label": "YouTube subscribers"},
         ],
-        "lead": "Source: HT Media, as presented in 2026 proposals.",
+        "source": "HT Media, as presented in 2026 proposals.",
     },
     "delhi-ncr": {
         "layout": "data-table",

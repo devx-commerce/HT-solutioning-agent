@@ -48,7 +48,7 @@ heading.
 | Response quality | Judge model | At least 75% of the case's rubrics and the general ones hold, judged on the email and the full deck |
 | Research quality | Judge model | At least 75% of the research rubrics hold (past decks searched from several angles, competitors checked, no guessed websites, rejected drafts fixed) |
 | Grounding | Judge model | At least 80% of the email's statements are supported by what research returned |
-| Deck built properly | Code | A deck was published with HT's logo and at least `min_images` pictures |
+| Deck built properly | Code | A deck was published with HT's logo and one picture for every three content slides |
 | No competitor sources | Code | No competitor newspaper is cited anywhere |
 | Consistent names | Code | Each part of the solution keeps one name from the overview to its own slide |
 

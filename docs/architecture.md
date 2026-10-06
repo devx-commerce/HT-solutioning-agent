@@ -19,7 +19,7 @@ later.
 | Build queue | Pub/Sub, `solutioning-agent-build-work` | Holds briefs waiting to be built; retries failures; parks repeated failures in `…-dead` |
 | The agent | Vertex AI Agent Engine | Researches and builds or revises decks. ADK agent on `gemini-3.8-flash` |
 | Chat | Gemini Enterprise | People talk to the agent |
-| Past decks search | Vertex AI Search, Google Drive connector | Searches HT's past pitch decks |
+| Past decks search | BigQuery, `past_deck_slides`, refreshed daily by the `solutioning-agent-past-decks` trigger | HT's past pitch decks, slide by slide, tagged with their HT IPs and solution types. The older Vertex AI Search Drive connector stays available through `settings.past_decks_source` |
 | Deck renderer | Cloud Run, `solutioning-agent-renderer` (private) | Turns a deck into PowerPoint in HT's theme |
 | Decks | Google Drive, as Google Slides | Read-only for HT's domains |
 | Records | BigQuery, `solutioning_agent` | Every deck, email decision, brief and research call |
@@ -37,11 +37,12 @@ Every resource by name: [operations/resources.md](operations/resources.md).
 | Is this email a brief? | `gemini-2.5-flash-lite` |
 | The agent: research plan, drafting, revisions | `gemini-3.8-flash` |
 | Web research with Google Search | `gemini-3.8-flash` |
-| Past decks answers | Vertex AI Search's own answer model |
+| Past-deck index: reading picture-only pages, tagging | `gemini-3.8-flash` |
+| Past-deck index: search by meaning | `text-embedding-005` |
 | Slide pictures | `gemini-2.5-flash-image` |
 | Eval judge | `gemini-2.5-pro` |
 
-All except the past decks model are set in `config.yaml`.
+All except the embedding model are set in `config.yaml`.
 
 ## Identities
 

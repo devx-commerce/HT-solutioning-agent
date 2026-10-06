@@ -78,12 +78,13 @@ def _result(eval_metric: EvalMetric, invocations, expected, scores: list[float])
 def deck_quality_gate(eval_metric, actual_invocations, expected_invocations=None, conversation_scenario=None):
     scores = []
     for inv in actual_invocations:
-        _, result = _built_deck(inv)
+        deck, result = _built_deck(inv)
         if not result:
             scores.append(0.0)
             continue
         images = (result.get("images") or {}).get("generated", 0)
-        checks = [bool(result.get("ht_logo")), images >= master_deck.MIN_IMAGES]
+        fewest = master_deck.picture_range(deck)[0] if isinstance(deck, dict) else 1
+        checks = [bool(result.get("ht_logo")), images >= fewest]
         scores.append(sum(checks) / len(checks))
     return _result(eval_metric, actual_invocations, expected_invocations, scores)
 

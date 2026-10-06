@@ -19,8 +19,10 @@ def test_the_shipped_config_is_valid():
     (("settings", "eval_summary_email"), "sales.agent", "eval_summary_email: must be an email address"),
     (("settings", "onboarding_domains"), ["@hindustantimes.com"], "without @"),
     (("settings", "excluded_senders"), ["payroll"], "full email addresses"),
-    (("settings", "max_slides"), 50, "from 7 to 30"),
-    (("settings", "min_images"), "3", "from 0 to 10"),
+    (("settings", "max_slides"), 60, "from 7 to 50"),
+    (("settings", "max_images"), 30, "from 0 to 20"),
+    (("settings", "past_decks_source"), "drive", '"bigquery" or "vertex"'),
+    (("settings", "past_decks_refresh_schedule"), "daily", "cron schedule"),
     (("settings", "sweep_schedule"), "every 30 minutes", "cron schedule"),
     (("settings", "usage_report_schedule"), "mondays", "cron schedule"),
     (("settings", "new_inbox_lookback_hours"), 2.5, "from 0 to 168"),
@@ -62,6 +64,6 @@ def test_the_defaults_in_code_match_the_shipped_config():
     s = CFG["settings"]
     assert list(ingestion._DEFAULT_EXCLUDED_SENDERS) == s["excluded_senders"]
     assert {k: list(v) for k, v in source_policy._DEFAULT_OUTLETS.items()} == s["competitor_outlets"]
-    assert (master_deck.MAX_SLIDES, master_deck.MIN_IMAGES) == (s["max_slides"], s["min_images"])
+    assert (master_deck.MAX_SLIDES, master_deck.MAX_IMAGES) == (s["max_slides"], s["max_images"])
     from app.pipeline import storage
     assert storage.BOOTSTRAP_LOOKBACK.total_seconds() == s["new_inbox_lookback_hours"] * 3600

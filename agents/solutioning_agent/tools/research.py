@@ -35,7 +35,7 @@ from google.cloud import bigquery
 from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
-from . import billing, source_policy
+from . import billing, past_decks, source_policy
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -46,6 +46,10 @@ RESEARCH_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
 # Searched through the Gemini Enterprise app, not the data store directly:
 # the Drive connector runs in FEDERATED mode, querying Drive live rather than
 # building an index, and that path is served by the app's serving config.
+# "bigquery" searches the past_deck_slides table (tools/past_decks.py);
+# "vertex" the Gemini Enterprise Drive connector below, kept until the
+# table has proved itself.
+PAST_DECKS_SOURCE = os.environ.get("PAST_DECKS_SOURCE", "vertex")
 PAST_DECKS_ENGINE = os.environ.get("PAST_DECKS_ENGINE", "")
 PAST_DECKS_LOCATION = os.environ.get("PAST_DECKS_LOCATION", "us")
 # Comma-separated: the same decks live in more than one folder (an original
@@ -327,6 +331,45 @@ def _hidden_deck_ids(tool_context) -> frozenset[str]:
     return frozenset(h for h in (hidden or []) if isinstance(h, str))
 
 
+def _search_past_deck_table(query: str, brief_id: str, tool_context, started: float) -> dict:
+    try:
+        results = past_decks.search(query, _hidden_deck_ids(tool_context))
+    except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
+        _log_retrieval(brief_id, "past_decks", "error", started, query=query, error=str(exc)[:300])
+        return {"results": [], "error": "HT's past decks could not be searched just now. Say so "
+                                         "rather than implying no prior work exists."}
+    _log_retrieval(brief_id, "past_decks", "success" if results else "no_results", started,
+                   query=query, result_count=len(results),
+                   strong=sum(1 for r in results if r["match"] == "strong"),
+                   source_urls=[r["link"] for r in results])
+    return {"results": results}
+
+
+def read_past_deck(deck_id: str, brief_id: str, tool_context: ToolContext = None) -> dict:
+    """Read one of HT's past decks in full: its summary, every slide's text
+    in order, and the HT IPs and solution types it covers.
+
+    Read every past deck you build on before using anything from it, so
+    what you take is understood in its own context, not from one slide.
+
+    Args:
+        deck_id: the deck_id of a result from search_past_decks.
+        brief_id: the brief this research belongs to; pass "" for ad-hoc
+            research not tied to a brief.
+    """
+    started = time.time()
+    if deck_id in _hidden_deck_ids(tool_context):
+        return {"error": "No past deck with that id."}
+    try:
+        deck = past_decks.read(deck_id)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
+        _log_retrieval(brief_id, "past_deck_read", "error", started, deck_id=deck_id, error=str(exc)[:300])
+        return {"error": "That deck could not be read just now."}
+    _log_retrieval(brief_id, "past_deck_read", "success" if deck else "no_results", started,
+                   deck_id=deck_id, slides=len(deck["slides"]) if deck else 0)
+    return deck or {"error": "No past deck with that id. Use a deck_id from search_past_decks."}
+
+
 def search_past_decks(query: str, brief_id: str, tool_context: ToolContext = None) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 
@@ -339,11 +382,14 @@ def search_past_decks(query: str, brief_id: str, tool_context: ToolContext = Non
             research not tied to a brief.
 
     Returns:
-        `results` (the past decks that matched, each with a link) and
-        `findings`, each a claim paired with the decks it came from. Or an
-        empty list with a reason when the corpus isn't reachable.
+        `results`: the past decks that matched, best first, each with a
+        link and the slides that matched. Read any deck you build on with
+        read_past_deck. Or an empty list with a reason when the corpus
+        isn't reachable.
     """
     started = time.time()
+    if PAST_DECKS_SOURCE == "bigquery":
+        return _search_past_deck_table(query, brief_id, tool_context, started)
     missing = [
         name for name, value in (
             ("PAST_DECKS_ENGINE", PAST_DECKS_ENGINE),

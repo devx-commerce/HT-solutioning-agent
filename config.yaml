@@ -57,8 +57,8 @@ settings:
   new_inbox_lookback_hours: 24
 
   # Deck rules.
-  max_slides: 20   # longest deck the agent may build (7 to 30)
-  min_images: 3    # pictures a new deck must have (0 to 10)
+  max_slides: 40   # longest deck the agent may build (7 to 50)
+  max_images: 13   # most pictures a deck may have (0 to 20); a new deck has one for every 2 to 3 slides up to this
 
   # Models. Change only to a model enabled in this project.
   models:
@@ -70,6 +70,12 @@ settings:
   # Google Drive folders and the briefs sheet, by id (from their URLs).
   deck_folder_id: 1ethtG7qzfsL1QOsutGRqr9MaeN9vpzIF        # "Agent Generated Decks"
   past_decks_folder_ids: [1P2dOh60waUoIHgeaoaGE1zYqAiBzM9F_]  # "Past Pitch Decks"
+
+  # Where the agent searches past decks: "bigquery" (the past-deck index,
+  # refreshed on past_decks_refresh_schedule and by hand) or "vertex" (the
+  # Gemini Enterprise Drive connector).
+  past_decks_source: bigquery
+  past_decks_refresh_schedule: "0 6 * * *"   # daily 06:00, India time
   ht_assets_folder_id: 1SMqLJ-lHAYSDMb2lvZ-kMPJIOS6TbLBN   # holds the HT logo
   briefs_sheet_id: 1q-U5t4d_F0KmWuKJcsccCmgAiqPgs1pUhbo9HIAcbzI
 

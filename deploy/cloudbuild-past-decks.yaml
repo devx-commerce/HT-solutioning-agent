@@ -1,0 +1,22 @@
+# The past-deck index: reads every file in settings.past_decks_folder_ids that
+# is new or changed since the last run into the past_deck_slides table the
+# agent searches. Run by the "solutioning-agent-past-decks" trigger on
+# settings.past_decks_refresh_schedule (its scheduler job is created by the
+# deploy); run it by hand after adding decks.
+timeout: 3600s
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: index-past-decks
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        pip install --quiet --root-user-action=ignore pyyaml pypdf \
+          -r agents/solutioning_agent/requirements.txt
+        python -m deploy.render_config
+        # The agent package loads its own .env (written just above).
+        python -m agents.solutioning_agent.index_past_decks

@@ -64,6 +64,16 @@ minutes, depending on where in the 5-minute cycle it arrived.
   attachments (up to about 6,000 characters each), not images. A brief sent
   only as a scanned image isn't read.
 
+## The email's layout
+
+The agent's report always has the same sections in the same order: **Ideas
+in the deck** (each part of the deck by its exact name, split into what came
+from HT's past decks, naming the deck, and what is new for this client),
+then what it found from HT's past decks, from the web and social, from
+YouTube and from the client's website, then the gaps. Every link is named
+the same way whatever the agent wrote: the website for a web page, "HT past
+deck: <name>" for a past deck, "YouTube" for a video.
+
 ## The sources section can be trusted
 
 The list of sources checked, and which returned nothing, is built from the

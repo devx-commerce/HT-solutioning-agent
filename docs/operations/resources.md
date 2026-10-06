@@ -32,13 +32,15 @@ Inventory taken 5 Oct 2026.
 | Cloud Build trigger | `solutioning-agent-weekly-evals` | The full eval run, only when someone clicks Run. Made once in the console. |
 | Cloud Build trigger | `solutioning-agent-weekly-report` | The weekly usage email. Created by the deploy. |
 | Cloud Scheduler | `solutioning-agent-weekly-report` | Runs that trigger on `settings.usage_report_schedule`. Created by the deploy. |
+| Cloud Build trigger | `solutioning-agent-past-decks` | Refreshes the past-deck index. Run it by hand after adding decks. Created by the deploy. |
+| Cloud Scheduler | `solutioning-agent-past-decks` | Runs that trigger on `settings.past_decks_refresh_schedule`. Created by the deploy. |
 | Cloud Scheduler | `solutioning-agent-sweep` | Checks connected inboxes on `settings.sweep_schedule`. Pause it in the Cloud Scheduler console to stop reading inboxes; deploys never change that. Scheduler jobs can't carry labels. |
 
 ## Data
 
 | Resource | Name | Notes |
 |---|---|---|
-| BigQuery dataset | `solutioning_agent` (US) | `briefs` (every deck, as the deck of record), `decisions` (every email the sweep judged), `ingestion_threads` (every brief from email), `audit_log` (every research call), `users` (connected inboxes), `sweep_state`. |
+| BigQuery dataset | `solutioning_agent` (US) | `briefs` (every deck, as the deck of record), `decisions` (every email the sweep judged), `ingestion_threads` (every brief from email), `audit_log` (every research call), `users` (connected inboxes), `sweep_state`, `past_deck_slides` (the past-deck index, made by its first run). |
 | BigQuery dataset | `solutioning_agent_eval` (US) | The same tables, used only by evals. |
 | Cloud Storage | `academic-diode-477405-m3-solutioning-agent-evals` | Eval results and summaries. |
 | Cloud Storage | `academic-diode-477405-m3-solutioning-agent-decks` | The pictures in every deck, one file per picture. The deck saved in BigQuery refers to them, which keeps it small however many pictures a deck has. Created by the deploy. |
@@ -61,7 +63,7 @@ These resources don't support labels.
 | Resource | Id | Notes |
 |---|---|---|
 | Gemini Enterprise app | `ht-sales-pitch-agent_1789729673554` ("HT-sales-pitch-agent") | Where people chat with the agent. Its agent "Solutioning Agent" points at the Agent Engine above. Web address: `https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a` |
-| Data store (Google Drive connector) | `past-decks-solutioning-agent_1790332071532_google_drive` | How the agent searches HT's past decks. Results are limited to the "Past Pitch Decks" folder. |
+| Data store (Google Drive connector) | `past-decks-solutioning-agent_1790332071532_google_drive` | The older way the agent searched HT's past decks, used only when `settings.past_decks_source` is `vertex`. |
 
 ## Google Drive (account sales.agent@hindustantimes.com)
 

@@ -21,10 +21,10 @@ edits and prices every deck before it goes to a client.
   own website. Every fact in the deck and the email carries its source, and
   competitor newspapers are never cited.
 - **Builds the deck.** A fixed structure (brief, insight, big idea, solution,
-  plan, next steps), HT's and the client's logos on the cover, generated
+  plan, why this works), HT's and the client's logos on the cover, generated
   pictures, and dedicated slides with concrete detail for each custom
-  activation. It never states prices; commercials are left to HT's pricing
-  team.
+  activation. It never mentions prices; commercials are left to HT's sales
+  and pricing teams.
 - **Revises in chat.** In Gemini Enterprise, people can change text, add,
   remove or reorder slides, ask for new pictures, place their own image, and
   add HT's credentials slides.

@@ -139,6 +139,9 @@ def send_deck_notification(
                 "it cited a link no research tool returned for this brief."
             )]
 
+    if evidence:
+        evidence = uniform_links(evidence, deck_link)
+
     gap_lines = (
         "\n".join(f"  - {g.replace('**', '')}" for g in gaps)
         if gaps
@@ -270,6 +273,32 @@ def split_gaps(evidence: str) -> tuple[str, list[str]]:
 _LINK = re.compile(r"\]\((https?://[^)\s]+)\)|(https?://[^\s)\]>]+)")
 _YOUTUBE_ID = re.compile(r"(?:youtube\.com/watch\?(?:.*&)?v=|youtu\.be/)([\w-]{6,})")
 _DRIVE_FILE_ID = re.compile(r"(?:[?&]id=|/d/)([-\w]{25,})")
+
+
+_MD_LINK = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
+_PLACEHOLDER_TEXT = re.compile(r"^(?:ht past deck|sources?|link|here|deck)\s*[:\-]?\s*", re.I)
+
+
+def uniform_links(evidence: str, deck_link: str | None = None) -> str:
+    """Every link in the agent's reply named the same way, whatever it wrote:
+    the site for a web page, "HT past deck: <name>" for a past deck, "YouTube"
+    for a video, "Draft deck" for this deck."""
+    deck_key = _url_key(deck_link) if deck_link else None
+
+    def name(m: re.Match) -> str:
+        text, url = m.group(1).strip(), m.group(2)
+        if deck_key and _url_key(url) == deck_key:
+            label = "Draft deck"
+        elif "drive.google.com" in url or "docs.google.com" in url:
+            deck = re.sub(r"\.(pptx|pdf)$", "", _PLACEHOLDER_TEXT.sub("", text), flags=re.I).strip()
+            label = f"HT past deck: {deck}" if deck else "HT past deck"
+        elif _YOUTUBE_ID.search(url):
+            label = "YouTube"
+        else:
+            label = urllib.parse.urlsplit(url).netloc.lower().removeprefix("www.")
+        return f"[{label}]({url})"
+
+    return _MD_LINK.sub(name, evidence)
 
 
 def _url_key(url: str) -> str:

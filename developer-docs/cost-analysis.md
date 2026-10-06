@@ -24,6 +24,12 @@ smoke run were removed on 5 Oct 2026 because of this cost.
 |---|---|---|---|
 | The agent researching and writing | gemini-3.8-flash | ~10 calls, ~129k tokens in, ~22k out | ~₹34 |
 | Pictures | gemini-2.5-flash-image | ~4 images, ~1.3k output tokens each | ~₹16 (₹3.70 an image) |
+
+Pictures now scale with the deck: one for every two to three content slides,
+capped by `settings.max_images`. The cap of 13 keeps pictures under ₹50 a
+deck (13 × ₹3.70 = ₹48); a 30-slide deck has about 10 to 13. Raise the cap
+only with that cost in mind. A revision that adds pictures counts toward the
+same cap, so a deck never holds more than 13.
 | Is this a brief? | gemini-2.5-flash-lite | 1 call | under ₹0.10 |
 | Web research grounding | Google Search on Gemini 3 | ~5 searches | free (first 5,000 a month) |
 

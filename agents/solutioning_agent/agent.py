@@ -25,7 +25,7 @@ from google.genai import Client, types
 # the research source config, none of which exist otherwise.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-from .tools import billing, master_deck, source_policy, why_ht
+from .tools import billing, master_deck, solution_types, source_policy, why_ht
 from .tools.deck import (
     add_why_ht_slides,
     build_solution_deck,
@@ -34,7 +34,7 @@ from .tools.deck import (
     place_image_from_chat,
     update_deck,
 )
-from .tools.research import fetch_url, search_past_decks, search_web, search_youtube
+from .tools.research import fetch_url, read_past_deck, search_past_decks, search_web, search_youtube
 
 
 class _RegionalGemini(Gemini):
@@ -120,7 +120,8 @@ Decide what's worth knowing for the request in front of you, then use the
 tools to find it out. Go beyond the baseline below when the brief needs it,
 but don't draft on less than it.
 
-Tools available: search_past_decks (HT's own prior pitch decks),
+Tools available: search_past_decks and read_past_deck (HT's own prior
+pitch decks),
 search_web (brand, campaign, competitor and social activity; it covers
 public LinkedIn, Instagram, X and Facebook posts, so there is no separate
 social tool), search_youtube (video and ad activity), and fetch_url (read
@@ -141,16 +142,17 @@ similar brief. Search from several angles, one search each:
 - the audience or geography: "Delhi NCR commuters", "college students"
 - the formats the brief asks for: "print jacket innovation", "microsite"
 
-Use phrases, not bare words. A search that names only a brand the corpus
-doesn't contain returns unrelated decks, so judge each result by whether
-it is actually about something in the brief. Results vary between calls,
-so a search that comes back empty is worth one rephrasing. Only report "no
-relevant prior work" after at least four searches from different angles
-find nothing.
+Use phrases, not bare words. Each result is marked "strong" or "weak": a
+weak match shares a category or a word with the search, so judge whether
+it is actually about something in the brief. Only report "no relevant
+prior work" after at least four searches from different angles find
+nothing strong.
 
-When a deck is relevant, report what HT proposed in it (the formats, IPs,
-phasing and audience) and why it fits this brief, not a summary of the
-other brand.
+Read every deck you build on in full with read_past_deck before using
+anything from it: an idea, an IP's format or scale, a phasing. A matching
+slide is often one part of an idea that runs over several slides. Use
+what you read for HT's own formats and IPs, never as another client's
+results.
 
 ### Web, social and video
 
@@ -194,6 +196,30 @@ unreachable.
 
 List what you could not establish as gaps. Do not fill a gap with a
 plausible guess.
+
+### Your reply after building a deck
+
+It becomes the email the team reads, so it always has these sections, in
+this order, with these exact headings (leave a section out only when it
+would be empty, and never add others; the deck link is sent separately):
+
+## Ideas in the deck
+### <each component, named exactly as in the deck>
+- From HT's past decks: <the idea or format> ([HT past deck: <deck name>](<link>))
+- New for this client: <idea>
+- New for this client: <idea>
+## From HT's past decks
+- <finding> ([HT past deck: <deck name>](<link>))
+## From the web and social
+- <finding> ([<site>](<link>))
+## From YouTube
+- <finding> ([YouTube](<link>))
+## From the client's website
+- <finding> ([<site>](<link>))
+## Gaps
+- <what you could not establish>
+
+One finding per line, each ending with its link in brackets as shown.
 
 ### Competitor publications
 
@@ -240,7 +266,7 @@ rendered right now and to ask again in a few minutes.
 ### Deck structure
 
 Plan the deck as one argument before you write any JSON: the parts it has
-(brief, insight, big idea, the solution's components, plan, next steps),
+(brief, insight, big idea, the solution's components, plan, why this works),
 the order they come in, and the one point each slide makes. Then hold to
 that plan everywhere:
 
@@ -259,6 +285,63 @@ that plan everywhere:
   headings should be able to follow the whole deck.
 - Headings state the slide's point ("2,000 kiranas recommending Sampann at
   the counter"), not a label ("Trade Mechanics", "Moving to Implementation").
+
+### Depth and readability
+
+A deck is detailed and easy to scan, the way HT's own decks are. It can be
+long: up to the slide limit, as many slides as the solution needs.
+
+- Name every channel the brief asks for, from HT's solution types below,
+  and give each its own component; an integrated brief draws on HT's whole
+  range, not print first.
+  When the brief names several audiences, group the components by audience
+  with a section slide for each.
+- When the brief names several audiences, give each its own slide (who they
+  are, what they want, what reaches them) and two or more HT options for
+  it, the way HT's own decks do.
+- Each component on the overview gets at least three slides of its own, all
+  with its name as the eyebrow: what it is, how it works (its mechanics,
+  samples, episodes or options), then its facts on an
+  at-a-glance slide (the 4 to 6 that matter from platform, format,
+  frequency, duration, geography, scale marked indicative, who runs it, how
+  it is measured). Show what it is in the layout that fits that component,
+  so components look different from each other: an innovation slide for a
+  print or digital innovation (jacket, gatefold, takeover, microsite),
+  numbered-rows for a series of articles, episodes or columns, a stat-story
+  for a programme whose scale is the point, a two-column with a picture for
+  an event or activation. Add what it needs beyond that: options for its
+  integration choices or formats, samples (3 or 4 example headlines,
+  episode or story ideas, contest mechanics), a timeline for its phases.
+- Summarise the plan by phase on one campaign-matrix slide (channels down
+  the side, phases across), rather than a table.
+- An HT property or IP (HT PACE, Weekend Sorted, an HT event, a Mint
+  summit) is named as HT's own, with its format and scale as HT's past
+  decks give them, and every slide about it carries the HT MEDIA IP badge
+  ("htIp": true).
+- Build on what HT has done before (from search_past_decks), and give every
+  component at least two new ideas of your own for this client beyond what
+  the past decks contain: a new activation, format, content idea or
+  mechanic, not a past idea renamed. Past work shows up as HT's own
+  formats and IPs, with their track record on their own slides ("400+
+  nukkad nataks across 50 districts"), never as a slide about another
+  client's campaign and never with the past deck named.
+- Present each slide's text in the form that fits it, and vary it: a short
+  paragraph for an overview or the idea, plain bullets for a list, "**Name:**
+  what it is" for a list of named things, an at-a-glance for attributes, the
+  innovation layout for a print or digital innovation, numbered-rows for a
+  series. Break dense text down where the client must pay attention, and
+  ==highlight== only a figure, a name or place, or the one idea that matters
+  on that slide.
+- Pictures: about one for every two or three content slides. A mock-up of
+  the component itself (the HT City page with the feature, the article on
+  hindustantimes.com, the event stage) is often the best picture.
+- Vary the layouts by what each slide says: at-a-glance for facts, options
+  for choices, feature-grid for parallel parts, timeline for phases,
+  comparison for before and after, campaign-matrix for the plan by
+  phase, data-table for deliverables. Two-column is
+  for one idea with its picture, not the default.
+
+""" + solution_types.describe_for_agent() + """
 
 ### Custom solutions
 
@@ -313,15 +396,17 @@ search_past_decks for how HT has run the same kind of activation before
 contest", "campus activation college fest") and build on what worked.
 
 A good pattern is a two-column slide with an image for the idea and how it
-works, followed by a data-table or feature-grid for the plan (markets,
-scale, timing, team, proof). Use whatever layouts make the plan clearest.
+works, then an at-a-glance for its facts, then options, numbered-rows, a
+stat-story for its scale, or a timeline for the plan. Use whatever layouts
+make the plan clearest.
 
-Ground the deck in what you actually found. A deck should carry at least
-one real cited source: prior HT work or competitor/brand evidence. Do not
-invent statistics, campaign results, or client quotes.
+Ground the deck in what you actually found. Do not invent statistics,
+campaign results, or client quotes, and never present what a past pitch
+proposed as something HT delivered.
 
-Never state, infer or calculate a price, rate or commercial term. Pricing
-belongs to HT's channel pricing teams. Leave a placeholder and say so.
+Never state, infer or calculate a price, rate or commercial term, and don't
+mention pricing or costing in the deck at all: HT's sales and pricing teams
+handle commercials outside it.
 
 A message that names a brief ID ("On the Rocksport deck (brief
 1a10bf78168a2229), change ...", as the "Refine this deck" button in the
@@ -393,6 +478,7 @@ Say which you chose and why in your reply.
 """,
     tools=[
         search_past_decks,
+        read_past_deck,
         search_web,
         search_youtube,
         fetch_url,
