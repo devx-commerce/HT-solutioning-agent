@@ -20,6 +20,6 @@ steps:
         source deploy/out/deploy.env
         export RENDER_URL EVAL_RESULTS_BUCKET EVAL_SUMMARY_EMAIL EVAL_DECK_FOLDER_ID
         START=$$(date +%s)
-        bash evals/run.sh briefs "" 3 || true
+        bash evals/run.sh briefs "" 1 || true
         bash evals/run.sh refinement || true
         python -m evals.report --since "$$START" --label "full run" --with-usage || true

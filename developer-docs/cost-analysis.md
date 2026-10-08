@@ -23,13 +23,13 @@ smoke run were removed on 5 Oct 2026 because of this cost.
 | Part | Model | Per deck | Cost |
 |---|---|---|---|
 | The agent researching and writing | gemini-3.8-flash | ~10 calls, ~129k tokens in, ~22k out | ~₹34 |
-| Pictures | gemini-2.5-flash-image | ~4 images, ~1.3k output tokens each | ~₹16 (₹3.70 an image) |
+| Pictures | gemini-2.5-flash-image (until 8 Oct 2026) | ~4 images, ~1.3k output tokens each | ~₹16 (₹3.70 an image) |
 
 Pictures now scale with the deck: one for every two to three content slides,
-capped by `settings.max_images`. The cap of 13 keeps pictures under ₹50 a
-deck (13 × ₹3.70 = ₹48); a 30-slide deck has about 10 to 13. Raise the cap
-only with that cost in mind. A revision that adds pictures counts toward the
-same cap, so a deck never holds more than 13.
+capped by `settings.max_images` (15). With gemini-3.1-flash-image at about
+$0.067 (₹6.4) a picture, plus the brand check and occasional retries, a
+picture costs about ₹7.5: 8 pictures about ₹60, 10 about ₹75, 15 about
+₹113. A revision that adds pictures counts toward the same cap.
 | Is this a brief? | gemini-2.5-flash-lite | 1 call | under ₹0.10 |
 | Web research grounding | Google Search on Gemini 3 | ~5 searches | free (first 5,000 a month) |
 
@@ -37,9 +37,9 @@ Where the agent's tokens go:
 
 - Every call re-sends the fixed instruction (~4.8k tokens) and the ten tool
   declarations (~2.9k tokens): ~77k of the ~129k input tokens per deck, about
-  ₹11. Gemini's implicit caching may discount this; the token metrics don't
-  show cached tokens separately, so check the "cached" SKUs in Billing
-  Reports before counting on it.
+  ₹11. Gemini's implicit caching already discounts this: on repeat calls
+  about 4k tokens of the instruction come back as cached, so explicit
+  caching was not added.
 - The rest of the input is research results (~45k characters a deck), the
   brief and the growing conversation.
 - Output: the deck JSON is ~3k tokens; most of the ~22k is the model's
@@ -59,15 +59,18 @@ The same ₹50 deck, plus ~₹96 of judging by gemini-2.5-pro:
 
 ## Cutting eval cost
 
-None of these are applied.
+All three were applied on 8 Oct 2026: a full run went from ~₹4,100 to
+~₹700. The grounding check (`hallucinations_v1`) was dropped too; the
+response rubrics still check that each statistic matches what research
+returned and that assumed figures are marked as such.
 
 | Change | Full run | Trade-off |
 |---|---|---|
-| As now | ~₹4,100 | |
+| Before 8 Oct 2026 | ~₹4,100 | |
 | Judge samples once (`num_samples: 1`) | ~₹2,800 | Noisier single verdicts; the 3 repeats average them anyway |
 | Cap the judge's thinking (`judge_model_config.thinking_config.thinking_budget`, e.g. 2048) | ~₹2,400 | Check verdicts match the uncapped run first |
 | Each brief once (`run.sh briefs "" 1` in `deploy/cloudbuild-evals.yaml`) | ~₹1,500 | No view of run-to-run variation |
-| All three | ~₹700 | |
+| All three (now) | ~₹700 | |
 
 A cheaper judge model barely helps: gemini-3.8-flash output is only ~25%
 cheaper than gemini-2.5-pro's.

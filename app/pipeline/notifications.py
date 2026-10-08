@@ -55,6 +55,17 @@ _SOURCE_LABELS = {
 }
 
 
+def _ordered_sources(retrievals: list[dict]) -> list[dict]:
+    """One row per source in the order the research section shows them, with
+    full reads of past decks folded into the past-decks row."""
+    by = {r["source"]: dict(r) for r in retrievals}
+    reads = by.pop("past_deck_read", None)
+    if reads and "past_decks" in by:
+        by["past_decks"]["decks_read"] = reads.get("successes", 0)
+    order = list(_SOURCE_LABELS)
+    return sorted(by.values(), key=lambda r: order.index(r["source"]) if r["source"] in order else len(order))
+
+
 def _sources_section(retrievals: list[dict]) -> str:
     """Which sources returned something and which didn't, from telemetry.
 
@@ -72,21 +83,23 @@ def _sources_section(retrievals: list[dict]) -> str:
     return "\n".join(
         f"  - {_SOURCE_LABELS.get(r['source'], r['source'])}: "
         f"{outcomes.get(r['outcome'], r['outcome'])}{_search_count(r)}"
-        for r in retrievals
+        for r in _ordered_sources(retrievals)
     )
 
 
 def _search_count(r: dict) -> str:
     """" (1 of 4 searches)" when a source was searched more than once."""
     calls = r.get("calls") or 1
+    read = f", {r['decks_read']} deck{'s' if r['decks_read'] != 1 else ''} read in full" if r.get("decks_read") else ""
     if calls < 2:
-        return ""
+        return f" ({read[2:]})" if read else ""
     if r.get("outcome") == "success":
-        return f" ({r.get('successes', 0)} of {calls} searches)"
-    return f" ({calls} searches)"
+        return f" ({r.get('successes', 0)} of {calls} searches{read})"
+    return f" ({calls} searches{read})"
 
 
-def refinement_link(client_name: str | None, brief_id: str, recipient: str = "") -> str | None:
+def refinement_link(client_name: str | None, brief_id: str, recipient: str = "",
+                    brief_ref: str | None = None) -> str | None:
     """The deep link to the refinement loop: the Solutioning Agent in Gemini
     Enterprise, opened on a new chat with the deck already named in the
     message box ("On the Sleepwell deck (brief 1a0f…), change "), so the
@@ -101,7 +114,8 @@ def refinement_link(client_name: str | None, brief_id: str, recipient: str = "")
         return None
     ht_domains = {d.strip().lower() for d in os.environ.get("ALLOWED_ONBOARD_DOMAIN", "").split(",") if d.strip()}
     account = recipient if recipient.rsplit("@", 1)[-1].lower() in ht_domains else os.environ.get("AGENT_EMAIL", "")
-    prompt = f"On the {client_name or 'client'} deck (brief {brief_id}), change "
+    prompt = (f"On brief {brief_ref}, change " if brief_ref
+              else f"On the {client_name or 'client'} deck (brief {brief_id}), change ")
     user = f"authuser={urllib.parse.quote(account, safe='')}&" if account else ""
     return f"{base}/session/-?{user}q={urllib.parse.quote(prompt, safe='')}"
 
@@ -116,6 +130,7 @@ def send_deck_notification(
     retrievals: list[dict] | None = None,
     allowed_urls: set[str] | None = None,
     refine_link: str | None = None,
+    brief_ref: str | None = None,
 ) -> None:
     """One new email to the inbox the brief came from: never a reply on the
     triggering thread, which may have external participants.
@@ -142,6 +157,11 @@ def send_deck_notification(
     if evidence:
         evidence = uniform_links(evidence, deck_link)
 
+    sections = report_sections(evidence) if evidence else []
+    research = [f"{t.upper()}\n{b}" for t, b in sections if t.lower() in {r.lower() for r in REPORT_ORDER[:4]}]
+    rest = [f"{t.upper()}\n{b}" for t, b in sections if t.lower() not in {r.lower() for r in REPORT_ORDER[:4]}]
+    report_text = "==== RESEARCH ====\n\n" + ("\n\n".join(research) or "  (none reported)") + (
+        "\n\n" + "=" * 18 + "\n\n" + "\n\n".join(rest) if rest else "")
     gap_lines = (
         "\n".join(f"  - {g.replace('**', '')}" for g in gaps)
         if gaps
@@ -152,7 +172,7 @@ def send_deck_notification(
 CLIENT
   {client_name or '(not extracted)'}
 
-BRIEF
+BRIEF{f" ({brief_ref})" if brief_ref else ""}
   {brief or '(not extracted)'}
 
 DRAFT DECK
@@ -162,8 +182,7 @@ REFINE THIS DECK
   Opens the Solutioning Agent with this deck named; finish the sentence and send.
   {refine_link}
 """ if refine_link else ""}
-EVIDENCE SUMMARY
-{evidence or '  (none reported)'}
+{report_text}
 
 GAPS: not established, do not assume
 {gap_lines}
@@ -181,7 +200,7 @@ forward, not a client-ready document.
     message = email.mime.multipart.MIMEMultipart("alternative")
     message.attach(email.mime.text.MIMEText(body, "plain", "utf-8"))
     message.attach(email.mime.text.MIMEText(
-        _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link),
+        _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link, brief_ref),
         "html", "utf-8",
     ))
     message["to"] = to
@@ -345,23 +364,98 @@ def _inline_html(text: str) -> str:
     return out.replace("<a ", _INLINE["<a "])
 
 
+_NEW_IDEA = re.compile(r"New (?:idea \(not in any past deck\)|for this client)\.?")
+_ADAPTED = re.compile(r"Adapted from HT formats\.?")
+
+
 def _markdown_html(text: str) -> str:
     out = _MD.render(text or "")
     for tag, styled in _INLINE.items():
         out = out.replace(tag, styled)
-    return out
+    # A component the agent proposed itself, tagged so it stands out as
+    # clearly as the past-deck links do.
+    out = _NEW_IDEA.sub(
+        f'<span style="display:inline-block;background:{_CYAN};color:#FFFFFF;font-size:11px;font-weight:bold;'
+        f'letter-spacing:.5px;padding:1px 7px;border-radius:3px;">NEW IDEA</span> '
+        f'<span style="color:{_MUTED};font-size:12px;">not in any past deck</span>', out)
+    return _ADAPTED.sub(
+        f'<span style="display:inline-block;border:1px solid {_CYAN};color:{_BLUE};font-size:11px;font-weight:bold;'
+        f'letter-spacing:.5px;padding:0 6px;border-radius:3px;">ADAPTED</span> '
+        f'<span style="color:{_MUTED};font-size:12px;">reworks formats HT already uses</span>', out)
 
 
 def _section(title: str, inner: str) -> str:
+    """A small labelled block (the brief, the deck): no rule above it."""
     return (
-        f'<tr><td style="padding:18px 0 0;">'
+        f'<tr><td style="padding:16px 0 0;">'
         f'<div style="font-size:11px;font-weight:bold;letter-spacing:1px;'
-        f'text-transform:uppercase;color:{_BLUE};margin:0 0 8px;">{html.escape(title)}</div>'
+        f'text-transform:uppercase;color:{_BLUE};margin:0 0 6px;">{html.escape(title)}</div>'
         f"{inner}</td></tr>"
     )
 
 
-def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link=None) -> str:
+def _part(title: str) -> str:
+    """A main part of the email: a clear rule, then the largest label."""
+    return (
+        f'<tr><td style="padding:30px 0 0;"><div style="border-top:2px solid {_CYAN};padding-top:12px;'
+        f'font-size:16px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:{_BLUE};'
+        f'margin:0;">{html.escape(title)}</div></td></tr>'
+    )
+
+
+def _heading(title: str, inner: str) -> str:
+    """A heading inside a part, or a smaller part of its own: all one size,
+    in the same blue uppercase label style as the brief and the deck."""
+    return (
+        f'<tr><td style="padding:18px 0 0;"><div style="font-size:12.5px;font-weight:bold;'
+        f'letter-spacing:1px;text-transform:uppercase;color:{_BLUE};margin:0 0 8px;">'
+        f'{html.escape(title)}</div>{inner}</td></tr>'
+    )
+
+
+
+
+# The agent's report, section by section, in the order the email shows them.
+REPORT_ORDER = ("From HT's past decks", "From the web and social", "From YouTube",
+                "From the client's website", "The solution")
+_REPORT_HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*#*\s*$")
+
+
+def report_sections(evidence: str) -> list[tuple[str, str]]:
+    """(heading, Markdown body) for each "## " section of the agent's report,
+    known sections in REPORT_ORDER first, then any others as written. Text
+    before the first heading becomes "Notes"."""
+    found: dict[str, list[str]] = {}
+    current = "Notes"
+    for line in (evidence or "").split("\n"):
+        m = _REPORT_HEADING.match(line.strip())
+        if m and line.lstrip().startswith("## "):
+            current = m.group(1).strip().strip("*").strip()
+            continue
+        found.setdefault(current, []).append(line)
+    sections = [(t, "\n".join(b).strip()) for t, b in found.items()]
+    sections = [(t, b) for t, b in sections if b]
+    rank = {t.lower(): i for i, t in enumerate(REPORT_ORDER)}
+    return sorted(sections, key=lambda tb: rank.get(tb[0].lower(), len(REPORT_ORDER) + (tb[0] == "Notes")))
+
+
+def _report_html(evidence, gap_html: str, sources: str) -> str:
+    """Research (each source as a heading under one large heading), a clear
+    rule, then the solution, the gaps and the sources checked, all at one size."""
+    sections = report_sections(evidence) if evidence else []
+    research = [(t, b) for t, b in sections if t.lower() in {r.lower() for r in REPORT_ORDER[:4]}]
+    rest = [(t, b) for t, b in sections if (t, b) not in research]
+    none = f'<p style="margin:0;color:{_MUTED};">None reported.</p>'
+    out = [_part("Research")]
+    out += [_heading(t, _markdown_html(b)) for t, b in research] or [_heading("Findings", none)]
+    out.append(f'<tr><td style="padding:28px 0 0;"><div style="border-top:2px solid {_CYAN};"></div></td></tr>')
+    out += [_heading(t, _markdown_html(b)) for t, b in rest]
+    out.append(_heading("Gaps: not established, do not assume", gap_html))
+    out.append(_heading("Sources checked", sources))
+    return "\n".join(out)
+
+
+def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine_link=None, brief_ref=None) -> str:
     client = html.escape(client_name or "(not extracted)")
     deck = (
         f'<a href="{html.escape(deck_link)}" style="display:inline-block;background:{_CYAN};'
@@ -390,7 +484,7 @@ def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine
         "<ul style=\"margin:0;padding-left:20px;\">" + "".join(
             f'<li style="margin:0 0 4px;"><b>{html.escape(_SOURCE_LABELS.get(r["source"], r["source"]))}</b>: '
             f'{html.escape(outcomes.get(r["outcome"], r["outcome"]) + _search_count(r))}</li>'
-            for r in retrievals
+            for r in _ordered_sources(retrievals)
         ) + "</ul>"
         if retrievals else f'<p style="margin:0;color:{_MUTED};">No retrieval was recorded for this brief.</p>'
     )
@@ -405,11 +499,9 @@ def _html_body(client_name, brief, deck_link, evidence, gaps, retrievals, refine
   <div style="font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:{_BLUE};">Solution deck drafted</div>
   <h1 style="{_HEAD}font-size:24px;margin:6px 0 0;">{client}</h1>
 </td></tr>
-{_section("Brief", f'<p style="margin:0;">{html.escape(brief or "(not extracted)")}</p>')}
+{_section("Brief" + (f" · {brief_ref}" if brief_ref else ""), f'<p style="margin:0;">{html.escape(brief or "(not extracted)")}</p>')}
 {_section("Draft deck", deck)}
-{_section("Evidence and findings", _markdown_html(evidence) if evidence else f'<p style="color:{_MUTED};">None reported.</p>')}
-{_section("Gaps: not established, do not assume", gap_html)}
-{_section("Sources checked", sources)}
+{_report_html(evidence, gap_html, sources)}
 <tr><td style="padding:22px 0 0;border-top:1px solid {_RULE};color:{_MUTED};font-size:12px;">
   Commercials are not included: the agent generates no rate, price or commercial term.
   This is a first draft for a person to take forward, not a client-ready document.

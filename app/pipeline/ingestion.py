@@ -320,6 +320,15 @@ def _deck_link(reply: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _quietly(fn, *args):
+    """A lookup or save that must never stop a finished deck being delivered."""
+    try:
+        return fn(*args)
+    except Exception as exc:  # noqa: BLE001
+        event("build.extra_failed", "WARNING", step=fn.__name__, error=str(exc)[:200])
+        return None
+
+
 def execute_build(payload: dict) -> str:
     """The /work side: one Pub/Sub message, one Agent Engine invocation.
 
@@ -369,6 +378,8 @@ def execute_build(payload: dict) -> str:
         return "failed"
 
     labels.apply_label(gmail, message_id, labels.DECK_GENERATED_LABEL)
+    ref = _quietly(storage.brief_ref, thread_id)
+    _quietly(storage.save_report, thread_id, reply)
     notifications.send_deck_notification(
         # Builds queued before this field existed fall back to the agent's own inbox.
         payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
@@ -380,8 +391,9 @@ def execute_build(payload: dict) -> str:
         allowed_urls=storage.retrieved_urls(thread_id),
         refine_link=notifications.refinement_link(
             payload["client_name"], thread_id,
-            payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""),
+            payload.get("mailbox") or os.environ.get("AGENT_EMAIL", ""), brief_ref=ref,
         ),
+        brief_ref=ref,
     )
     sheet.append_row(
         client_name=payload["client_name"],
@@ -389,6 +401,7 @@ def execute_build(payload: dict) -> str:
         touchpoints=payload["touchpoints"],
         category=payload["category"],
         month=sheet.month_label(received_at),
+        brief_ref=ref,
     )
     storage.mark_thread_sheet_written(thread_id)
     storage.mark_thread_built(thread_id, brief_id=thread_id)

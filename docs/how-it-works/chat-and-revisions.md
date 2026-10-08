@@ -9,7 +9,8 @@ published to the same Slides file, so links already shared keep working.
 | Request | What happens |
 |---|---|
 | Build a deck from a pasted brief | Researches and builds a new deck, as from email. If the client already has decks, it lists them and asks whether to change one or build a new one. |
-| Find a deck | Looks it up by client name (partial names work: "Tata" finds "Tata Sampann"). If several match, it lists each with its title, when it last changed and its link, and asks which one. |
+| Find a deck | By brief reference ("Tata Sampann 3", in any case, with spaces or hyphens) or by client name (partial names work: "Tata" finds "Tata Sampann"). If several match, it lists each with its reference, when it last changed and its link, and asks which one. |
+| Explain where an idea came from | Answers from the research report saved with the deck: which past HT deck, website, social post or video it rests on, or that it is the agent's own idea. Decks built before 8 Oct 2026 had their reports recovered from the "deck drafted" emails. |
 | Change text | Any text on any slide: headings, body, cards, table rows, timeline steps, figures. |
 | Add a slide | In any approved layout, at any position, written to the same rules as a new deck. |
 | Delete or move a slide | Any slide except the cover (always first) and the closing slide (always last). |

@@ -42,14 +42,17 @@
    and [decks.md](decks.md)). Usually 5 to 15 minutes.
 7. **The pipeline then:**
    - labels the email **deck-generated** in the inbox it came from;
+   - saves the agent's research report with the deck, so chat can later
+     answer where an idea came from;
    - emails that inbox "Solution deck drafted: <client>", from
-     sales.agent@hindustantimes.com, with the deck link, the evidence and its
-     sources, which sources returned nothing, and the gaps. A "Refine this
-     deck" button is the deep link to the refinement loop: it opens the
-     Solutioning Agent in Gemini Enterprise with the deck's name and brief ID
-     already typed in (`infrastructure.gemini_enterprise_agent_url`);
+     sales.agent@hindustantimes.com, with the brief reference, the deck
+     link, the research and its sources, the solution, which sources
+     returned nothing, and the gaps. A "Refine this deck" button is the deep
+     link to the refinement loop: it opens the Solutioning Agent in Gemini
+     Enterprise with "On brief <reference>, change " already typed in
+     (`infrastructure.gemini_enterprise_agent_url`);
    - adds a row to the briefs sheet (client, brief, touchpoints, category,
-     month).
+     month, brief reference, request type).
 
 From the email arriving to the "deck drafted" email: typically 10 to 20
 minutes, depending on where in the 5-minute cycle it arrived.
@@ -66,11 +69,13 @@ minutes, depending on where in the 5-minute cycle it arrived.
 
 ## The email's layout
 
-The agent's report always has the same sections in the same order: **Ideas
-in the deck** (each part of the deck by its exact name, split into what came
-from HT's past decks, naming the deck, and what is new for this client),
-then what it found from HT's past decks, from the web and social, from
-YouTube and from the client's website, then the gaps. Every link is named
+After the brief and the deck buttons, the email has a **Research** part: what
+the agent found in HT's past decks, on the web and social, on YouTube and on
+the client's website, each under its own heading. Then **The solution**:
+each part of the deck by its exact name, marked as taken from a past deck
+(naming the deck), **Adapted** (the agent's own idea built from mechanics HT
+already uses) or **New idea** (nothing like it in the past decks). Then the
+gaps and the sources checked, in the same order as the research. Every link is named
 the same way whatever the agent wrote: the website for a web page, "HT past
 deck: <name>" for a past deck, "YouTube" for a video.
 

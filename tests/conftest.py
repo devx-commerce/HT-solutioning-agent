@@ -33,3 +33,13 @@ def _as_in_ci(monkeypatch):
 
     monkeypatch.setattr(research, "PAST_DECKS_SOURCE", "vertex")
     monkeypatch.setattr(deck, "DECK_IMAGES_BUCKET", "")
+
+
+@pytest.fixture(autouse=True)
+def _offline_brief_refs(monkeypatch):
+    """Brief references are looked up and given in BigQuery; tests of the
+    deck tools never reach it. tests/test_brief_refs.py covers the real logic."""
+    from agents.solutioning_agent.tools import deck
+
+    monkeypatch.setattr(deck, "_resolve", lambda v: (v or "").strip())
+    monkeypatch.setattr(deck, "_give_ref", lambda *a: None)

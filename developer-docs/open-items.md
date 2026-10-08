@@ -256,11 +256,9 @@ disabling it. Supersede it with a new version instead.
   immediately before a demo — label the zero-risk resources (secrets,
   dataset, Pub/Sub, scheduler) first and do Cloud Run in a quiet window.
 
-- **Four duplicate "Solutioning Agent" Agent Engine resources exist** from
-  repeated `adk deploy agent_engine` runs, which create a new resource each
-  time rather than updating in place. Only one is wired to GE. Worth pruning
-  the stale ones eventually — carefully, since deleting the live one breaks
-  the GE registration.
+- **Duplicate Agent Engine resources: resolved (checked 8 Oct 2026).** Only
+  the live Solutioning Agent engine (`1985844993356464128`) remains; the other
+  engines in the project belong to other HT teams.
 
 ## Ideas not yet designed
 

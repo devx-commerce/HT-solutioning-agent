@@ -56,23 +56,27 @@ When it finds a brief:
 2. It adds the label **deck-generated** to the brief in your inbox.
 3. You receive an email titled **"Solution deck drafted: [client name]"** from
    sales.agent@hindustantimes.com. It contains:
+   - the **brief reference**, such as "Tata Sampann 3" (the client and a
+     number). The deck's file in Drive has the same name, and typing it in
+     chat finds the deck;
    - a summary of the brief as the agent understood it;
    - a button to open the deck;
    - a **Refine this deck with the agent** button: it opens the Solutioning
      Agent in Gemini Enterprise, signed in as you, with the deck already
-     named ("On the Decathlon deck (brief 1a10…), change "). Finish the
+     named ("On brief Decathlon 2, change "). Finish the
      sentence and send;
      see [Using chat](#using-chat-in-gemini-enterprise) for what you can ask;
-   - **Ideas in the deck:** each part of the deck by its name in the deck,
-     with what came from HT's past decks (and which deck) and what is new
-     for this client. Search the email for an idea's name to see where it
+   - **Research:** what it found, grouped by where it came from (HT's past
+     decks, the web and social, YouTube, the client's website), each point
+     ending with a link named after its source: the website, "HT past deck:
+     <name>" or "YouTube";
+   - **The solution:** each part of the deck by its name in the deck, marked
+     "From HT's past decks" (with the deck), **Adapted** (the agent's own idea
+     built from formats HT already uses) or **New idea** (nothing like it in
+     the past decks). Search the email for an idea's name to see where it
      came from;
-   - what it found, grouped by where it came from (HT's past decks, the web
-     and social, YouTube, the client's website), each point ending with a
-     link named after its source: the website, "HT past deck: <name>" or
-     "YouTube";
-   - which sources it checked and which returned nothing;
-   - the gaps: things it could not establish and you should check.
+   - the gaps: things it could not establish and you should check;
+   - which sources it checked and which returned nothing.
 
 ### If the agent missed a brief
 
@@ -106,8 +110,10 @@ original. This keeps the agent's later revisions from overwriting your work.
 
 Figures the agent estimated rather than found are marked **(indicative)**.
 Figures from research show their source in small print at the foot of the
-slide, and generated pictures are marked as for representation only. Decks
-never mention prices.
+slide, and generated pictures are marked as for representation only. Pictures
+never show text, logos or mastheads. Slides that need an HT page or jacket
+mock-up say "For the design team:" and what belongs there; fill these before
+sending. Decks never mention prices.
 
 ## Using chat in Gemini Enterprise
 
@@ -136,7 +142,8 @@ Things you can ask, in plain words:
 | You want to | Say something like |
 |---|---|
 | Build a deck from a brief | "Build a deck for this brief:" and paste the email |
-| Find a deck | "Find the Decathlon deck" (it lists all matches if there are several) |
+| Find a deck | "Open Decathlon 2", or "Find the Decathlon deck" (it lists all matches if there are several) |
+| Ask where an idea came from | "On brief Decathlon 2, where did the Play Pass idea come from?" |
 | Change wording | "On the big idea slide, change the heading to 'Every haat is a stage'" |
 | Add, remove or reorder slides | "Delete the market context slide and move the timeline after the big idea" |
 | Add a slide | "Add a slide after the mystery shopper slide about a WhatsApp recipe contest, with a picture" |

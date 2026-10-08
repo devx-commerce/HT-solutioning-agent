@@ -37,7 +37,7 @@ MAX_SLIDES = int(os.environ.get("MAX_SLIDES", "40"))
 # needs one picture for every three content slides and at most one for every
 # two (picture_range); checked only when a deck is built, never on a
 # revision, so decks built before the rule existed stay editable.
-MAX_IMAGES = int(os.environ.get("MAX_IMAGES", "13"))
+MAX_IMAGES = int(os.environ.get("MAX_IMAGES", "15"))
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,9 @@ LAYOUTS: dict[str, LayoutRule] = {
         "Scale (indicative), Who runs it, Measured by. 4 to 6 rows, one short "
         "value each. Optionally a picture of the component on the right.",
         text={"eyebrow": 40, "heading": 75, "lead": 140, "imageAlt": 140},
-        lists={"facts": (4, 6, {"label": 24, "value": 90})},
+        # 8 rows is the hard limit so decks built before the 6-row rule stay
+        # editable; a new draft is held to 6 (first_draft_problems).
+        lists={"facts": (4, 8, {"label": 24, "value": 120})},
         image=ImageRule(
             "12:13", "1100×1200 px",
             "The facts take the full width without one.",
@@ -201,7 +203,8 @@ LAYOUTS: dict[str, LayoutRule] = {
         card_image=ImageRule("1:1", "400×400 px", "Cards show the name only."),
     ),
     "closing": LayoutRule(
-        use_for="Last slide only: thank you and the commercial note.",
+        use_for="Last slide only: one line to end on, like \"Let's build this "
+        "together\". Never \"next steps\", \"way forward\" or commercials.",
         text={"eyebrow": 40, "heading": 60, "lead": 160},
     ),
 }
@@ -389,6 +392,12 @@ def enforce(deck: dict) -> list[str]:
             elif fits and "columns" not in slide:
                 slide["columns"] = fits[0]
 
+        if layout == "closing":
+            # HT's decks end on a line, never a to-do list; a "Next steps"
+            # label crept onto closing slides even after the slide was dropped.
+            if _NEXT_STEPS.search(str(slide.get("eyebrow") or "")):
+                slide.pop("eyebrow")
+
         if layout == "quote":
             # The layout draws its own curly quotes; the model often adds its
             # own. It also prefixes the attribution with an em dash, and the
@@ -430,9 +439,28 @@ def enforce(deck: dict) -> list[str]:
                 "slide 1 (brief) must use an aside, not an image: one line "
                 "that states the point of the slide."
             )
+    _badge_first_slide_only(slides)
     if slides and isinstance(slides[-1], dict) and slides[-1].get("layout") != _LAST:
         problems.append("The last slide must be the closing slide (layout closing).")
     return problems
+
+
+_NEXT_STEPS = re.compile(r"\bnext steps?\b|\bway forward\b|\bcommercials?\b", re.I)
+
+
+def _badge_first_slide_only(slides: list) -> None:
+    """The HT MEDIA IP badge goes on the first slide of each HT IP component
+    only. On every slide of it the badge reads as clutter, so it is taken
+    off the rest whatever the agent set."""
+    seen = set()
+    for s in slides:
+        if not isinstance(s, dict):
+            continue
+        key = s.get("eyebrow") or id(s)
+        if s.get("htIp"):
+            if key in seen:
+                s.pop("htIp")
+            seen.add(key)
 
 
 def _is_module_slide(slide) -> bool:
@@ -475,6 +503,19 @@ def first_draft_problems(deck: dict) -> list[str]:
                 )
 
     problems += _readability_problems(deck) + _component_problems(deck)
+    for i, slide in enumerate(deck.get("slides") or []):
+        if isinstance(slide, dict) and slide.get("layout") == "at-a-glance":
+            facts = slide.get("facts") if isinstance(slide.get("facts"), list) else []
+            long = [j for j, f in enumerate(facts) if isinstance(f, dict) and len(str(f.get("value") or "")) > 90]
+            if len(facts) > 6 or long:
+                problems.append(f"slide {i} (at-a-glance): keep to 6 facts of at most 90 characters each "
+                                f"(it has {len(facts)}{', some longer' if long else ''}).")
+    last = (deck.get("slides") or [None])[-1]
+    if isinstance(last, dict) and last.get("layout") == "closing":
+        for name in ("heading", "lead"):
+            if _NEXT_STEPS.search(str(last.get(name) or "")):
+                problems.append(f"closing slide: {name} talks about next steps. End on one line "
+                                "like \"Let's build this together\"; no next steps or commercials.")
     for i, slide in enumerate(deck.get("slides") or []):
         if not isinstance(slide, dict) or _is_module_slide(slide):
             continue
@@ -636,11 +677,6 @@ def _component_problems(deck: dict) -> list[str]:
             )
         if own:
             shapes.setdefault(tuple(s.get("layout") for s in own), []).append(name)
-        if any(s.get("htIp") for s in own) and not all(s.get("htIp") for s in own):
-            problems.append(
-                f'Component "{name}" is an HT IP on some of its slides but not all: '
-                'set "htIp": true on every slide of it.'
-            )
     # Every component told in the same run of layouts is what makes a deck
     # read as one slide repeated; at most half may share one.
     same = max(shapes.values(), key=len, default=[])
@@ -673,10 +709,12 @@ def describe_for_agent() -> str:
         "work for other clients: HT's own decks have neither. Never mention "
         "prices or costing anywhere; HT's sales team handles them.",
         "",
-        "Every slide about one of HT's own properties or IPs (HT PACE, Fresh on "
-        "Campus, Anokhee Club, Hindustan Olympiad, Weekend Sorted, an HT or Mint "
-        "summit) sets \"htIp\": true, which shows an HT MEDIA IP badge, and the "
-        "IP's card on the overview says it is HT's own.",
+        "The first slide of a component that is one of HT's own properties or "
+        "IPs (HT PACE, Fresh on Campus, Anokhee Club, Hindustan Olympiad, "
+        "Weekend Sorted, an HT or Mint summit) sets \"htIp\": true, which "
+        "shows an HT MEDIA IP badge; its other slides don't. HT's own "
+        "publications (HT City, Mint, Hindustan) are not IPs. The IP's card "
+        "on the overview says it is HT's own.",
         "",
         "Never use an em dash (—) or a spaced en dash ( – ) anywhere in a deck. "
         "They read as machine-written. Use a comma, colon or full stop.",
@@ -732,10 +770,16 @@ def describe_for_agent() -> str:
         "Describe a concrete scene in an Indian setting (who, where, what is "
         "happening, the mood), for example \"Homemakers watching a street "
         "theatre troupe perform at a busy weekly haat in a small UP town\". "
-        "Generic scenes and mock-ups (a sample newspaper page, a branded "
-        "canopy) are fine, and a mock-up of the component itself (the HT City "
-        "page carrying the feature, the article page, the event stage) is often "
-        "the best picture. A first draft needs one picture for every three "
+        "Pictures never contain text, logos, mastheads or brand names, so "
+        "describe people, places and objects, never words, slogans, signs or "
+        "a named publication or brand. A newspaper or phone in a scene is "
+        "fine when nothing on it needs to be read. Where a slide needs HT's "
+        "own branded artwork (an HT page or jacket mock-up, a masthead, an "
+        "article page) or the client's real creative, don't describe a "
+        "picture: start imageAlt with \"For the design team:\" and say what "
+        "belongs there, e.g. \"For the design team: Hindustan front-page "
+        "jacket with the Tata Sampann spice ad\". It stays a placeholder for "
+        "the design team and is not generated. A first draft needs one picture for every three "
         "content slides (not counting title, section and closing) and at most "
         f"one for every two, never more than {MAX_IMAGES}: give the big idea an "
         "image-hero and each component a picture on its what-it-is or "

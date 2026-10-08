@@ -18,7 +18,7 @@ from googleapiclient.discovery import build
 from ..auth.oauth_creds import get_credentials
 
 SHEET_ID = os.environ.get("BRIEFS_SHEET_ID", "")
-SHEET_RANGE = os.environ.get("BRIEFS_SHEET_RANGE", "Sheet1!A:I")
+SHEET_RANGE = os.environ.get("BRIEFS_SHEET_RANGE", "Sheet1!A:K")
 
 
 def month_label(received_at: datetime) -> str:
@@ -35,6 +35,7 @@ def append_row(
     touchpoints: str | None,
     category: str | None,
     month: str,
+    brief_ref: str | None = None,
 ) -> None:
     row = [
         client_name or "",
@@ -46,6 +47,8 @@ def append_row(
         brief or "",
         touchpoints or "",
         month,
+        brief_ref or "",  # Brief ref: the deck's readable reference, "Tata Sampann 3"
+        "Custom solution",  # Request type: the SOW's brief log; only custom solutions get a deck
     ]
     sheets = build("sheets", "v4", credentials=get_credentials())
     sheets.spreadsheets().values().append(

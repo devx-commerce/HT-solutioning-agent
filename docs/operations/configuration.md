@@ -27,7 +27,7 @@ config.yaml has problems; nothing was deployed:
 | `sweep_schedule` | `*/5 * * * *` | How often inboxes are checked (cron, India time). Deploying never pauses or resumes the check. |
 | `new_inbox_lookback_hours` | 24 | How far back a newly connected inbox is read on its first check (0 to 168). 0 reads only mail arriving from then on. |
 | `max_slides` | 40 | Longest deck the agent may build (7 to 50). |
-| `max_images` | 13 | Most pictures a deck may have (0 to 20). A new deck has one picture for every two to three content slides, up to this. Existing decks stay editable whatever this is. |
+| `max_images` | 15 | Most pictures a deck may have (0 to 20). A new deck has one picture for every two to three content slides, up to this. Existing decks stay editable whatever this is. |
 | `models.agent` | gemini-3.8-flash | Plans research, drafts and revises decks. |
 | `models.research` | gemini-3.8-flash | Web research with Google Search. |
 | `models.classify` | gemini-2.5-flash-lite | Decides whether an email is a brief. |

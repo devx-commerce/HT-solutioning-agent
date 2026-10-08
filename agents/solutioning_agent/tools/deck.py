@@ -39,7 +39,7 @@ from googleapiclient.http import MediaFileUpload
 from google.adk.tools.tool_context import ToolContext
 
 from ..oauth_creds import get_credentials
-from . import billing, logs, master_deck, research, visuals, why_ht
+from . import billing, brief_refs, logs, master_deck, research, visuals, why_ht
 
 PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 DATASET = os.environ.get("BQ_DATASET", "solutioning_agent")
@@ -209,7 +209,8 @@ def _upload_pptx(pptx: bytes, *, name: str, file_id: str) -> dict:
         media = MediaFileUpload(path, mimetype=_PPTX_MIME, resumable=False)
         if file_id:
             return drive.files().update(
-                fileId=file_id, media_body=media, fields="id,webViewLink"
+                fileId=file_id, media_body=media, fields="id,webViewLink",
+                **({"body": {"name": name}} if name else {}),
             ).execute()
         body = {"name": name, "mimeType": _SLIDES_MIME}
         if DECK_FOLDER_ID:
@@ -337,9 +338,7 @@ def build_solution_deck(
         logs.event("deck.renderer_unavailable", "ERROR", brief_id=brief_id, error=str(exc)[:300])
         return {"error": _UNAVAILABLE_MSG + f" ({exc})"}
 
-    created = _upload_pptx(
-        pptx, name=f"HT Media × {client_name} solution deck", file_id=""
-    )
+    created = _upload_pptx(pptx, name=brief_refs.client_label(client_name), file_id="")
     deck_id = created["id"]
     link = created.get("webViewLink") or (
         f"https://docs.google.com/presentation/d/{deck_id}/edit"
@@ -353,9 +352,35 @@ def build_solution_deck(
         deck_link=link,
         deck_json=deck_json,
     )
-    logs.event("deck.published", brief_id=resolved_brief, client=client_name,
+    ref = _give_ref(resolved_brief, client_name, deck_id)
+    logs.event("deck.published", brief_id=resolved_brief, brief_ref=ref, client=client_name,
                slides=len(deck.get("slides", [])), link=link)
-    return {"brief_id": resolved_brief, "deck_id": deck_id, "link": link, **pictures}
+    return {"brief_id": resolved_brief, "brief_ref": ref, "deck_id": deck_id, "link": link, **pictures}
+
+
+def _bq() -> bigquery.Client:
+    return bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
+
+
+def _give_ref(brief_id: str, client_name: str, deck_id: str) -> str | None:
+    """The deck's readable reference, and its file named after it. Never a
+    reason not to publish: without one, the deck keeps the client's name."""
+    try:
+        ref = brief_refs.assign(_bq(), f"{PROJECT}.{DATASET}.briefs", brief_id, client_name)
+        build("drive", "v3", credentials=get_credentials()).files().update(
+            fileId=deck_id, body={"name": ref}, fields="id").execute()
+        return ref
+    except Exception as exc:  # noqa: BLE001
+        logs.event("deck.ref_failed", "WARNING", brief_id=brief_id, error=str(exc)[:200])
+        return None
+
+
+def _resolve(ref_or_id: str) -> str:
+    """The brief ID for a reference people type ("Tata Sampann 3") or an ID."""
+    try:
+        return brief_refs.resolve(_bq(), f"{PROJECT}.{DATASET}.briefs", ref_or_id)
+    except Exception:  # noqa: BLE001 - an unresolvable value is looked up as given
+        return (ref_or_id or "").strip()
 
 
 def update_deck(brief_id: str, edits_json: str) -> dict:
@@ -392,6 +417,7 @@ def update_deck(brief_id: str, edits_json: str) -> dict:
         generated, or an error naming what could not be done (in which case
         nothing changed).
     """
+    brief_id = _resolve(brief_id)
     stored = _load_brief(brief_id)
     if not stored or not stored.get("deck_json"):
         return {"error": f"No stored deck found for brief_id {brief_id}."}
@@ -551,6 +577,7 @@ async def place_image_from_chat(
 
 
 def _place_image(brief_id: str, slide_index: int, target: str, data: bytes, mime: str) -> dict:
+    brief_id = _resolve(brief_id)
     if target not in ("slide_image", "client_logo"):
         return {"error": 'target must be "slide_image" or "client_logo".'}
     stored = _load_brief(brief_id)
@@ -668,6 +695,7 @@ def add_why_ht_slides(brief_id: str, variants: str) -> dict:
         The deck's link and which credentials slides were inserted, or an
         error naming what went wrong.
     """
+    brief_id = _resolve(brief_id)
     stored = _load_brief(brief_id)
     if not stored or not stored.get("deck_json"):
         return {"error": f"No stored deck found for brief_id {brief_id}."}
@@ -806,7 +834,7 @@ def _load_brief(brief_id: str) -> dict | None:
     rows = list(
         bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config()).query(
             f"""
-            SELECT brief_id, client_name, deck_file_id, deck_link, deck_json
+            SELECT brief_id, brief_ref, client_name, deck_file_id, deck_link, deck_json, report
             FROM `{PROJECT}.{DATASET}.briefs`
             WHERE brief_id = @brief_id
             ORDER BY updated_at DESC LIMIT 1
@@ -853,6 +881,7 @@ def get_deck_outline(brief_id: str) -> dict:
         stored deck exists for that brief. This is the only place to read a
         deck's content from.
     """
+    brief_id = _resolve(brief_id)
     stored = _load_brief(brief_id)
     if not stored or not stored.get("deck_json"):
         return {"error": f"No stored deck found for brief_id {brief_id}."}
@@ -862,7 +891,11 @@ def get_deck_outline(brief_id: str) -> dict:
         return {"error": f"The stored deck could not be read: {exc}"}
     return {
         "brief_id": brief_id,
+        "brief_ref": stored.get("brief_ref"),
         "link": stored.get("deck_link"),
+        # What the agent found and where each idea came from when the deck
+        # was built: the source for "where did this come from?" in chat.
+        "research_report": (stored.get("report") or "")[:15000] or None,
         # Full content, not just headings: with only field names the agent
         # couldn't tell which table row said "Live Hindustan", and made trial
         # edits against the real deck to find out.
@@ -894,7 +927,7 @@ def lookup_deck(client_name: str) -> dict:
     rows = list(
         bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config()).query(
             f"""
-            SELECT brief_id, client_name, deck_file_id, deck_link, updated_at,
+            SELECT brief_id, brief_ref, client_name, deck_file_id, deck_link, updated_at,
                    JSON_VALUE(deck_json, '$.slides[0].heading') AS title,
                    deck_json IS NOT NULL AS has_deck_json
             FROM `{PROJECT}.{DATASET}.briefs`
@@ -915,6 +948,7 @@ def lookup_deck(client_name: str) -> dict:
     decks = [
         {
             "brief_id": r["brief_id"],
+            "brief_ref": r.get("brief_ref"),
             "title": r["title"] or "",
             "client_name": r["client_name"],
             "link": r["deck_link"],
@@ -925,6 +959,6 @@ def lookup_deck(client_name: str) -> dict:
     ]
     result = {"found": True, "decks": decks}
     if len(decks) == 1:
-        result.update(brief_id=decks[0]["brief_id"], link=decks[0]["link"],
+        result.update(brief_id=decks[0]["brief_id"], brief_ref=decks[0]["brief_ref"], link=decks[0]["link"],
                       editable=decks[0]["editable"])
     return result

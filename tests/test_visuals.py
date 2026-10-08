@@ -255,9 +255,14 @@ def test_a_drive_failure_is_not_cached_so_the_next_deck_retries(monkeypatch):
 
 
 def _imagen_returning(data=b"JPEGBYTES", error=None):
-    """Stands in for gemini-2.5-flash-image's generate_content response."""
+    """Stands in for the image model's generate_content response. The brand
+    check on each picture is passed here; its own tests cover it."""
+    visuals._generated.clear(); visuals._clients.clear()
     client_cls = patch("google.genai.Client")
     started = client_cls.start()
+    check = patch.object(visuals, "_shows_brand_marks", return_value=False)
+    check.start()
+    client_cls.stop = lambda _stop=client_cls.stop: (check.stop(), _stop())
     gen = started.return_value.models.generate_content
     if error:
         gen.side_effect = error
@@ -440,3 +445,58 @@ def test_a_generated_picture_carries_the_representation_note():
         visuals.fill_images(deck)
     pictured = [s for s in deck["slides"] if s.get("image") == "data:image/jpeg;base64,NEW"]
     assert pictured and all(s["disclaimer"] == visuals.GENERATED_NOTE for s in pictured)
+
+
+def test_a_picture_meant_for_the_design_team_is_never_generated():
+    deck = _deck()
+    deck["slides"][1]["imageAlt"] = "For the design team: Hindustan front-page jacket with the client's ad"
+    with patch.object(visuals, "generate_image", return_value="data:image/jpeg;base64,NEW") as gen:
+        visuals.fill_images(deck)
+    assert all("design team" not in c.args[0] for c in gen.call_args_list)
+    assert deck["slides"][1]["image"].startswith(master_deck.PLACEHOLDER_PREFIX)
+
+
+class _Resp:
+    def __init__(self, data):
+        self.candidates = [type("C", (), {"content": type("X", (), {"parts": [
+            type("P", (), {"inline_data": type("I", (), {"data": data})()})()]})()})()]
+
+
+def _models(datas):
+    calls = iter(datas)
+    models = type("M", (), {"generate_content": lambda self, **kw: _Resp(next(calls))})()
+    return type("Client", (), {"models": models})()
+
+
+def test_a_picture_showing_brand_marks_is_retried_once_then_withheld(monkeypatch):
+    visuals._generated.clear(); visuals._withheld.clear(); visuals._clients.clear()
+    from google import genai
+    monkeypatch.setattr(genai, "Client", lambda **kw: _models([b"one", b"two"]))
+    with patch.object(visuals, "_shows_brand_marks", return_value=True) as check:
+        assert visuals.generate_image("A reader with the morning paper", "12:13") is None
+    assert check.call_count == 2
+    assert ("A reader with the morning paper", "1:1") in visuals._withheld
+
+
+def test_a_clean_picture_is_used_after_one_rejection(monkeypatch):
+    visuals._generated.clear(); visuals._withheld.clear(); visuals._clients.clear()
+    from google import genai
+    monkeypatch.setattr(genai, "Client", lambda **kw: _models([b"bad", b"good"]))
+    with patch.object(visuals, "_shows_brand_marks", side_effect=[True, False]):
+        uri = visuals.generate_image("Students at a campus fest", "12:13")
+    assert uri and uri.endswith(__import__("base64").b64encode(b"good").decode())
+
+
+def test_a_withheld_picture_says_why_on_its_slide():
+    deck = _deck()
+    desc = visuals._placeholder_slots(deck)[0][2]
+    with patch.object(visuals, "generate_image", side_effect=lambda d, r: visuals._withheld.add((d.strip(), "1:1")) or None):
+        visuals.fill_images(deck)
+    assert any(s.get("disclaimer") == visuals.WITHHELD_NOTE for s in deck["slides"])
+
+
+def test_the_check_fails_closed():
+    from google import genai
+    visuals._clients.clear()
+    with patch.object(genai, "Client", side_effect=RuntimeError("down")):
+        assert visuals._shows_brand_marks(b"x") is True

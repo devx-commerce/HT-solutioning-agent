@@ -246,3 +246,32 @@ def test_the_email_carries_the_refine_button_when_there_is_a_link():
 def test_every_link_in_the_email_is_named_the_same_way(written, shown):
     deck = "https://docs.google.com/presentation/d/1IkH4oAVmpJV-GQNRfYk9tdt8Z58eT5KsB2nqkcxaaX8/edit"
     assert notifications.uniform_links(f"- A finding ({written})", deck) == f"- A finding ({shown})"
+
+
+def test_the_report_becomes_sections_in_a_fixed_order():
+    report = ("## The solution\n- **HT PACE**: x. From HT's past decks\n"
+              "## From the web and social\n- a finding\n"
+              "## From HT's past decks\n- a past finding\n")
+    titles = [t for t, _ in notifications.report_sections(report)]
+    assert titles == ["From HT's past decks", "From the web and social", "The solution"]
+
+
+def test_sources_follow_the_research_order_and_fold_in_full_reads():
+    rows = [{"source": "youtube", "outcome": "success", "calls": 1, "successes": 1},
+            {"source": "past_deck_read", "outcome": "success", "calls": 3, "successes": 3},
+            {"source": "past_decks", "outcome": "success", "calls": 4, "successes": 4},
+            {"source": "web_search", "outcome": "success", "calls": 3, "successes": 3}]
+    text = notifications._sources_section(rows)
+    assert "past_deck_read" not in text
+    assert text.index("HT past decks") < text.index("Web and social") < text.index("YouTube")
+    assert "4 of 4 searches, 3 decks read in full" in text
+
+
+def test_a_new_idea_is_tagged():
+    html = notifications._markdown_html("- **Play Pass**: a store pipeline. New idea (not in any past deck)")
+    assert "NEW IDEA" in html and "New idea (not" not in html
+
+
+def test_an_adapted_idea_is_tagged_differently_from_a_new_one():
+    html = notifications._markdown_html("- **Play Pass**: sign-ups to store credit. Adapted from HT formats")
+    assert "ADAPTED" in html and "NEW IDEA" not in html and "Adapted from HT formats" not in html

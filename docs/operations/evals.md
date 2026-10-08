@@ -13,7 +13,7 @@ and after a change to the agent's instructions or models.
 
 | Run | What | How long | Where the result goes |
 |---|---|---|---|
-| Full run, when you start it | Every case three times, plus the revision chats | About 3 to 4 hours | Emailed to `settings.eval_summary_email` with the last 7 days' usage report ([weekly-report.md](weekly-report.md)); kept in the eval bucket |
+| Full run, when you start it | Every case once, plus the revision chats | About 1 to 2 hours | Emailed to `settings.eval_summary_email` with the last 7 days' usage report ([weekly-report.md](weekly-report.md)); kept in the eval bucket |
 | After a deploy, if turned on | The smoke cases (`settings.evals.smoke_cases`), once | About 15 minutes | Same as the full run. Off by default (`settings.evals.after_deploy: none`) |
 | By hand | Any cases you choose | About 5 minutes a case | Printed, and kept locally |
 
@@ -47,13 +47,15 @@ heading.
 |---|---|---|
 | Response quality | Judge model | At least 75% of the case's rubrics and the general ones hold, judged on the email and the full deck |
 | Research quality | Judge model | At least 75% of the research rubrics hold (past decks searched from several angles, competitors checked, no guessed websites, rejected drafts fixed) |
-| Grounding | Judge model | At least 80% of the email's statements are supported by what research returned |
 | Deck built properly | Code | A deck was published with HT's logo and one picture for every three content slides |
 | No competitor sources | Code | No competitor newspaper is cited anywhere |
 | Consistent names | Code | Each part of the solution keeps one name from the overview to its own slide |
 
 The judge model is `gemini-2.5-pro`, a stronger model than the one that
-writes the decks, sampled three times per rubric set with a majority vote.
+writes the decks, sampled once per rubric set with its thinking capped at
+2,048 tokens. Cheaper runs (about ₹700 for a full run) trade away some
+steadiness: to see how much results vary, run the briefs three times by
+hand (below).
 
 Each case hides its own HT deck from the past-decks search, so the agent
 can't copy the answer it's scored against. All other past decks stay

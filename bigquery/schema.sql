@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS `PROJECT.DATASET.briefs` (
   deck_link STRING,
   deck_json STRING,
   research_brief STRING,
+  brief_ref STRING,       -- what people see and type: "Tata Sampann 3"
+  client_slug STRING,     -- the client part of brief_ref, for numbering
+  report STRING,          -- the agent's research report from the build
   created_at TIMESTAMP,
   updated_at TIMESTAMP
 );

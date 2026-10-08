@@ -117,6 +117,26 @@ def record_decision(
 # --- thread-level intake tracking -------------------------------------------
 
 
+def save_report(brief_id: str, report: str) -> None:
+    """Keep the agent's research report with its deck, so chat can answer
+    where an idea or finding came from (the SOW's "reuses the evidence")."""
+    _client().query(
+        f"UPDATE `{PROJECT}.{DATASET}.briefs` SET report = @report WHERE brief_id = @brief_id",
+        job_config=bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("report", "STRING", report),
+            bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id)]),
+    ).result()
+
+
+def brief_ref(brief_id: str) -> str | None:
+    """The readable reference the agent gave this brief's deck ("Tata Sampann 3")."""
+    rows = list(_client().query(
+        f"SELECT brief_ref FROM `{PROJECT}.{DATASET}.briefs` WHERE brief_id = @brief_id AND brief_ref IS NOT NULL LIMIT 1",
+        job_config=bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("brief_id", "STRING", brief_id)]),
+    ).result())
+    return rows[0]["brief_ref"] if rows else None
+
+
 def built_deck_link(brief_id: str, reply_link: str | None, since: datetime) -> str | None:
     """The link of the deck saved for this brief since `since`, or None.
 

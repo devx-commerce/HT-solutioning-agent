@@ -33,7 +33,7 @@ for ds in "$BQ_DATASET" "$EVAL_DATASET"; do
   fi
   sed "s/PROJECT/$PROJECT_ID/g; s/DATASET/$ds/g" bigquery/schema.sql \
     | bq --project_id="$PROJECT_ID" query --use_legacy_sql=false --quiet >/dev/null
-  for col in "briefs deck_json STRING" "briefs research_brief STRING" "ingestion_threads received_at TIMESTAMP"; do
+  for col in "briefs deck_json STRING" "briefs research_brief STRING" "briefs brief_ref STRING" "briefs client_slug STRING" "briefs report STRING" "ingestion_threads received_at TIMESTAMP"; do
     set -- $col
     bq --project_id="$PROJECT_ID" query --use_legacy_sql=false --quiet \
       "ALTER TABLE \`$PROJECT_ID.$ds.$1\` ADD COLUMN IF NOT EXISTS $2 $3" >/dev/null

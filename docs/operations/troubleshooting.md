@@ -71,17 +71,38 @@ agent's logs at the same time.
 
 ## Drafts say "no prior HT work found" for everything
 
-- The agent account lost its **Gemini Enterprise licence**: the logs show
-  "User must be assigned a license". Reassign it.
-- The **Past Pitch Decks** folder was moved or unshared from
-  sales.agent@hindustantimes.com. Share it again, or update
+With `settings.past_decks_source: bigquery` (the default), the agent searches
+the `past_deck_slides` table:
+
+- **The table is empty or stale.** Check Cloud Build > History for the
+  `solutioning-agent-past-decks` runs (daily, `settings.past_decks_refresh_schedule`)
+  and run the trigger by hand. A run that reads no files usually means the
+  **Past Pitch Decks** folder was moved or unshared from
+  sales.agent@hindustantimes.com: share it again, or update
   `past_decks_folder_ids`.
+- **The search itself failed.** The agent's logs show "could not be
+  searched"; the email then lists past decks under sources that couldn't be
+  checked rather than as "nothing found".
+
+With `past_decks_source: vertex` (the older Drive connector), the usual cause
+is that the agent account lost its **Gemini Enterprise licence**: the logs
+show "User must be assigned a license". Reassign it.
+
+## A new deck's file isn't named after its brief reference
+
+Giving the reference never stops a deck being published: if it fails, the
+deck keeps the client name and the agent's logs show `deck.ref_failed` with
+the error. The deck still opens in chat by its link or client name. To give
+it its reference and rename the file, run
+`python -m deploy.backfill_brief_refs` from the repository to see what it
+would change, then again with `--apply`. Decks that already have a reference
+keep it, and only sheet rows with an empty Brief ref are filled.
 
 ## Decks look wrong
 
 | Symptom | Why | What to do |
 |---|---|---|
-| Pictures are grey placeholders | Image generation failed or was filtered | Usually transient; ask in chat for a new picture on that slide. If it's every deck, check `models.images` is enabled. |
+| Pictures are grey placeholders | Image generation failed, or the picture failed the brand check twice (a logo, masthead, brand name or readable words), or the slide needs HT artwork ("For the design team:") | Ask in chat for a new picture on that slide with a different scene, or have the design team add it. If it's every deck, check `models.images` is enabled. |
 | Client logo is a placeholder | The client's website offers no usable PNG or JPEG logo, or the agent couldn't establish the website | Attach the logo in chat: "use this as the client logo" |
 | HT logo is missing | The HT brand assets folder has no image with "logo" in its name, or isn't shared with the agent account | Fix the folder |
 | People can't open the deck | Their domain isn't in `deck_reader_domains` | Add it and deploy (applies to new decks) |

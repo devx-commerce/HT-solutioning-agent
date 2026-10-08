@@ -2,31 +2,118 @@
   "criteria": {
     "rubric_based_final_response_quality_v1": {
       "threshold": 0.75,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 3},
+      "judge_model_options": {
+        "judge_model": "gemini-2.5-pro",
+        "judge_model_config": {
+          "labels": {
+            "app": "solutioning-agent",
+            "component": "eval-judge",
+            "run": "eval"
+          },
+          "thinking_config": {
+            "thinking_budget": 2048
+          }
+        },
+        "num_samples": 1
+      },
       "rubrics": [
-        {"rubric_id": "g-custom-specificity", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Every custom solution in the deck (an on-ground activation, contest, event, mystery shopper, campus or school programme, influencer programme or microsite) has a slide of its own giving concrete specifics: where it runs (named cities, districts or venue types, with counts), how it works, its scale, its timing, and how it is proved or reported."}},
-        {"rubric_id": "g-assumptions-labelled", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Figures the agent assumed rather than found (counts, cities, durations, reach) are marked as indicative or assumed, and no assumed figure is presented as a researched fact or given a source."}},
-        {"rubric_id": "g-no-pricing", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Neither the deck nor the reply gives a price, rate, discount or cost split for HT's media or activations; commercials are left to HT's pricing team. Mentioning the client's own budget or product price is fine."}},
-        {"rubric_id": "g-sourced-stats", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "Every statistic on a stat-row slide names its source on that slide and matches a finding the research tools returned in this conversation."}},
-        {"rubric_id": "g-one-argument", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "The deck reads as one argument: brief, insight, big idea, the components of the solution, each component in detail, the plan, then why this works; and its headings state each slide's point rather than a generic label like 'Overview' or 'Strategic Pillars'."}},
-        {"rubric_id": "g-gaps-reported", "type": "FINAL_RESPONSE_QUALITY", "rubric_content": {"text_property": "The reply says which sources were checked, which returned nothing, and what could not be established, rather than implying everything was found."}}
+        {
+          "rubric_id": "g-custom-specificity",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "Every custom solution in the deck (an on-ground activation, contest, event, mystery shopper, campus or school programme, influencer programme or microsite) has a slide of its own giving concrete specifics: where it runs (named cities, districts or venue types, with counts), how it works, its scale, its timing, and how it is proved or reported."
+          }
+        },
+        {
+          "rubric_id": "g-assumptions-labelled",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "Figures the agent assumed rather than found (counts, cities, durations, reach) are marked as indicative or assumed, and no assumed figure is presented as a researched fact or given a source."
+          }
+        },
+        {
+          "rubric_id": "g-no-pricing",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "Neither the deck nor the reply gives a price, rate, discount or cost split for HT's media or activations; commercials are left to HT's pricing team. Mentioning the client's own budget or product price is fine."
+          }
+        },
+        {
+          "rubric_id": "g-sourced-stats",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "Every statistic on a stat-row slide names its source on that slide and matches a finding the research tools returned in this conversation."
+          }
+        },
+        {
+          "rubric_id": "g-one-argument",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "The deck reads as one argument: brief, insight, big idea, the components of the solution, each component in detail, the plan, then why this works; and its headings state each slide's point rather than a generic label like 'Overview' or 'Strategic Pillars'."
+          }
+        },
+        {
+          "rubric_id": "g-gaps-reported",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "The reply says which sources were checked, which returned nothing, and what could not be established, rather than implying everything was found."
+          }
+        }
       ]
     },
     "rubric_based_tool_use_quality_v1": {
       "threshold": 0.75,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 3},
+      "judge_model_options": {
+        "judge_model": "gemini-2.5-pro",
+        "judge_model_config": {
+          "labels": {
+            "app": "solutioning-agent",
+            "component": "eval-judge",
+            "run": "eval"
+          },
+          "thinking_config": {
+            "thinking_budget": 2048
+          }
+        },
+        "num_samples": 1
+      },
       "rubrics": [
-        {"rubric_id": "t-past-decks-angles", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "Before building the deck, the agent searched HT's past decks from at least three different angles (for example the client, the category, the objective, the audience or a format)."}},
-        {"rubric_id": "t-client-and-competitors", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "Before building the deck, the agent researched the client's recent campaigns or news and at least one named competitor."}},
-        {"rubric_id": "t-lookup-first", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "The agent called lookup_deck before build_solution_deck."}},
-        {"rubric_id": "t-website-not-guessed", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "Any url passed to fetch_url, and any client_website passed to build_solution_deck, is on a site (the same domain or a subdomain of it) that appears in the email or in an earlier tool result; going to that site's home page or another page on it is fine, but no site is guessed from the company's name."}},
-        {"rubric_id": "t-fixes-rejections", "type": "TOOL_USE_QUALITY", "rubric_content": {"text_property": "If build_solution_deck returned problems, the agent fixed every one and built again, rather than stopping, truncating text or reporting a deck that was never published."}}
+        {
+          "rubric_id": "t-past-decks-angles",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "Before building the deck, the agent searched HT's past decks from at least three different angles (for example the client, the category, the objective, the audience or a format)."
+          }
+        },
+        {
+          "rubric_id": "t-client-and-competitors",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "Before building the deck, the agent researched the client's recent campaigns or news and at least one named competitor."
+          }
+        },
+        {
+          "rubric_id": "t-lookup-first",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "The agent called lookup_deck before build_solution_deck."
+          }
+        },
+        {
+          "rubric_id": "t-website-not-guessed",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "Any url passed to fetch_url, and any client_website passed to build_solution_deck, is on a site (the same domain or a subdomain of it) that appears in the email or in an earlier tool result; going to that site's home page or another page on it is fine, but no site is guessed from the company's name."
+          }
+        },
+        {
+          "rubric_id": "t-fixes-rejections",
+          "type": "TOOL_USE_QUALITY",
+          "rubric_content": {
+            "text_property": "If build_solution_deck returned problems, the agent fixed every one and built again, rather than stopping, truncating text or reporting a deck that was never published."
+          }
+        }
       ]
-    },
-    "hallucinations_v1": {
-      "threshold": 0.8,
-      "judge_model_options": {"judge_model": "gemini-2.5-pro", "judge_model_config": {"labels": {"app": "solutioning-agent", "component": "eval-judge", "run": "eval"}}, "num_samples": 1},
-      "evaluate_intermediate_nl_responses": false
     },
     "deck_quality_gate": 1.0,
     "no_competitor_sources": 1.0,
@@ -34,15 +121,21 @@
   },
   "custom_metrics": {
     "deck_quality_gate": {
-      "code_config": {"name": "evals.metrics.deck_quality_gate"},
+      "code_config": {
+        "name": "evals.metrics.deck_quality_gate"
+      },
       "description": "A deck was published with HT's logo on the cover and at least three generated images."
     },
     "no_competitor_sources": {
-      "code_config": {"name": "evals.metrics.no_competitor_sources"},
+      "code_config": {
+        "name": "evals.metrics.no_competitor_sources"
+      },
       "description": "No competitor publication's link in the research results, the deck or the reply."
     },
     "component_names_consistent": {
-      "code_config": {"name": "evals.metrics.component_names_consistent"},
+      "code_config": {
+        "name": "evals.metrics.component_names_consistent"
+      },
       "description": "Share of the overview slide's cards that reappear word for word as a later slide's eyebrow."
     }
   }

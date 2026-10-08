@@ -58,14 +58,14 @@ settings:
 
   # Deck rules.
   max_slides: 40   # longest deck the agent may build (7 to 50)
-  max_images: 13   # most pictures a deck may have (0 to 20); a new deck has one for every 2 to 3 slides up to this
+  max_images: 15   # most pictures a deck may have (0 to 20); a new deck has one for every 2 to 3 slides up to this
 
   # Models. Change only to a model enabled in this project.
   models:
     agent: gemini-3.8-flash          # research plan, drafting, revisions
     research: gemini-3.8-flash       # web research with Google Search
     classify: gemini-2.5-flash-lite  # "is this email a brief?"
-    images: gemini-2.5-flash-image   # slide pictures
+    images: gemini-3.1-flash-image   # slide pictures (no text in them; each is checked before use)
 
   # Google Drive folders and the briefs sheet, by id (from their URLs).
   deck_folder_id: 1ethtG7qzfsL1QOsutGRqr9MaeN9vpzIF        # "Agent Generated Decks"

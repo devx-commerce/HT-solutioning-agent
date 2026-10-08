@@ -37,6 +37,9 @@ PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 # is, in both.
 IMAGE_LOCATION = os.environ.get("IMAGE_LOCATION", "global")
 IMAGE_MODEL = os.environ.get("IMAGE_MODEL", "gemini-2.5-flash-image")
+# Reads every generated picture before it goes on a slide (_shows_brand_marks).
+CHECK_MODEL = os.environ.get("RESEARCH_MODEL", "gemini-2.5-flash")
+CHECK_LOCATION = os.environ.get("MODEL_LOCATION", "global")
 
 _USER_AGENT = "Mozilla/5.0 (compatible; HT-SolutioningAgent/1.0)"
 _TIMEOUT = 10
@@ -68,9 +71,18 @@ _STYLE = (
     "High-quality editorial photograph for a professional Indian media "
     "company's sales presentation. Natural light, realistic, uncluttered "
     "composition. Full-bleed: the scene fills the whole frame edge to edge, "
-    "with no border, frame, mat or white margin. Avoid written text, "
-    "captions and watermarks unless the description asks for them."
+    "with no border, frame, mat or white margin. Absolutely no text "
+    "anywhere: no words, letters, numbers, logos, mastheads, brand names, "
+    "signage or watermarks. Newspapers, magazines, screens, packaging, "
+    "banners and boards show only pictures, colour blocks and plain grey "
+    "lines where text would be."
 )
+
+# A picture the agent leaves to HT's design team (an HT page, a masthead,
+# real brand artwork) is described with this prefix and never generated.
+DESIGN_TEAM_PREFIX = "For the design team:"
+# Small print on a slide whose picture was generated but failed the check.
+WITHHELD_NOTE = "The agent couldn't generate a clean picture for this description; please add one."
 
 
 # --- HT's logo ----------------------------------------------------------------
@@ -361,11 +373,8 @@ def generate_image(description: str, ratio: str) -> str | None:
         from google import genai
         from google.genai import types
 
-        client = genai.Client(vertexai=True, project=PROJECT, location=IMAGE_LOCATION)
-        resp = client.models.generate_content(
-            model=IMAGE_MODEL,
-            contents=f"{description}\n\n{_STYLE}",
-            config=types.GenerateContentConfig(
+        client = _client(IMAGE_LOCATION)
+        config = types.GenerateContentConfig(
                 labels=billing.labels("images"),
                 response_modalities=["IMAGE"],
                 image_config=types.ImageConfig(
@@ -376,19 +385,82 @@ def generate_image(description: str, ratio: str) -> str | None:
                         mime_type="image/jpeg", compression_quality=75
                     ),
                 ),
-            ),
-        )
-        data = _first_image_bytes(resp)
+            )
+        data = None
+        for attempt in (1, 2):  # one retry when the check rejects a picture
+            data = _first_image_bytes(client.models.generate_content(
+                model=IMAGE_MODEL, contents=f"{description}\n\n{_STYLE}", config=config))
+            if not data or not _shows_brand_marks(data):
+                break
+            log.info("visuals.image_rejected", extra={"description": description[:120], "attempt": attempt})
+            data = None
+            if attempt == 2:
+                _withheld.add(key)
     except Exception:  # noqa: BLE001 - a failed image leaves a placeholder
         log.warning("visuals.image_generation_failed", exc_info=True)
         return None
     if not data:
-        # Safety-filtered or empty: nothing to embed.
+        # Safety-filtered, empty or rejected: nothing to embed.
         log.info("visuals.image_filtered", extra={"description": description[:120]})
         return None
     uri = f"data:image/jpeg;base64,{base64.b64encode(data).decode('ascii')}"
     _generated[key] = uri
     return uri
+
+
+_withheld: set[tuple[str, str]] = set()
+_clients: dict[str, object] = {}
+
+
+def _client(location: str):
+    """One Gemini client per location for the process: a client made per
+    call can be closed by garbage collection while its request is in flight
+    ("Cannot send a request, as the client has been closed")."""
+    if location not in _clients:
+        from google import genai
+
+        _clients[location] = genai.Client(vertexai=True, project=PROJECT, location=location)
+    return _clients[location]
+
+_CHECK_SCHEMA = {"type": "OBJECT", "properties": {
+    "brand_marks": {"type": "BOOLEAN"}, "what": {"type": "STRING"}}, "required": ["brand_marks", "what"]}
+_CHECK_PROMPT = (
+    "This picture is for a slide in an HT Media sales deck. Set brand_marks "
+    "true if it shows ANY of these, however small or partial: a newspaper, "
+    "magazine or website name or masthead (HT's own or a competitor's, such "
+    "as Times of India or Dainik Jagran); any logo, brand name or labelled "
+    "product; any readable word or letter, garbled or not (signs, "
+    "packaging, banners, headlines, screens, clothing); any price or "
+    "currency amount. Plain numbers on their own (a jersey or bib number, a "
+    "scoreboard, a house number) are fine, and so are grey lines or blurred "
+    "shapes standing in for text. In what, name what you saw, or 'none'."
+)
+
+
+def _shows_brand_marks(data: bytes) -> bool:
+    """True when a generated picture shows a masthead, logo, brand name or any
+    readable text. No image model draws these reliably, so a picture that
+    shows one is never used. Fails closed: if the check can't run, the
+    picture is treated as failing."""
+    try:
+        from google import genai
+        from google.genai import types
+
+        resp = _client(CHECK_LOCATION).models.generate_content(
+            model=CHECK_MODEL,
+            contents=[types.Part.from_bytes(data=data, mime_type="image/jpeg"), _CHECK_PROMPT],
+            config=types.GenerateContentConfig(
+                temperature=0, response_mime_type="application/json", response_schema=_CHECK_SCHEMA,
+                labels=billing.labels("images"),
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)),
+        )
+        verdict = json.loads(resp.text)
+    except Exception:  # noqa: BLE001 - unchecked is never shown
+        log.warning("visuals.image_check_failed", exc_info=True)
+        return True
+    if verdict.get("brand_marks"):
+        log.info("visuals.image_shows_brand_marks", extra={"what": str(verdict.get("what"))[:160]})
+    return bool(verdict.get("brand_marks"))
 
 
 def _placeholder_slots(deck: dict, only=None) -> list[tuple[dict, str, str]]:
@@ -409,7 +481,8 @@ def _placeholder_slots(deck: dict, only=None) -> list[tuple[dict, str, str]]:
             ratio = image[len(master_deck.PLACEHOLDER_PREFIX):]
             alt = str(slide.get("imageAlt") or "")
             description = alt.split("): ", 1)[1] if alt.startswith("Image placeholder (") else alt
-            if description.strip() and description.strip() != master_deck.DEFAULT_CAPTION:
+            if (description.strip() and description.strip() != master_deck.DEFAULT_CAPTION
+                    and not description.strip().startswith(DESIGN_TEAM_PREFIX)):
                 slots.append((slide, ratio, description))
     return slots
 
@@ -439,7 +512,9 @@ def fill_images(deck: dict, only=None) -> dict:
 
     budget = _IMAGE_BUDGET_CHARS - len(json.dumps(deck))
     generated = 0
-    for (slide, _, description), uri in zip(todo, results):
+    for (slide, ratio, description), uri in zip(todo, results):
+        if (description.strip(), _GENERATION_RATIO.get(ratio)) in _withheld:
+            slide["disclaimer"] = WITHHELD_NOTE
         if not uri or len(uri) > budget:
             continue
         slide["image"] = uri

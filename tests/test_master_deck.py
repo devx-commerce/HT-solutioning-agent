@@ -560,11 +560,20 @@ def test_grid_cards_never_hold_label_value_lines():
     assert not any("feature-grid): cards" in p for p in master_deck.first_draft_problems(deck))
 
 
-def test_an_ht_ip_carries_its_badge_on_every_one_of_its_slides():
+def test_the_ht_ip_badge_stays_only_on_the_first_slide_of_its_component():
     deck = _deck()
     for s in deck["slides"]:
         if s.get("eyebrow") == "Print":
             s["htIp"] = True
-    assert not any("HT IP on some" in p for p in master_deck.first_draft_problems(deck))
-    next(s for s in deck["slides"] if s.get("eyebrow") == "Print").pop("htIp")
-    assert any('"Print" is an HT IP on some of its slides' in p for p in master_deck.first_draft_problems(deck))
+    assert master_deck.enforce(deck) == []
+    badged = [s for s in deck["slides"] if s.get("htIp")]
+    assert len(badged) == 1 and badged[0] is next(s for s in deck["slides"] if s.get("eyebrow") == "Print")
+
+
+def test_the_closing_slide_never_says_next_steps():
+    deck = _deck()
+    deck["slides"][-1]["eyebrow"] = "Next Steps"
+    assert master_deck.enforce(deck) == [] and "eyebrow" not in deck["slides"][-1]
+    deck["slides"][-1]["heading"] = "Next steps and commercials"
+    assert master_deck.enforce(deck) == []  # old decks stay editable
+    assert any("talks about next steps" in p for p in master_deck.first_draft_problems(deck))
