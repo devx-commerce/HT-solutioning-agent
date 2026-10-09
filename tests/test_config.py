@@ -55,6 +55,7 @@ def test_services_get_the_settings_the_code_reads():
     assert rc.onboarding_env(CFG)["PUBLIC_ROUTES_ONLY"] == "true"
     # People click the public address, never the private pipeline's.
     assert pipeline["ONBOARDING_URL"] == "https://solutioning-agent.hindustantimes.com"
+    assert rc.onboarding_env(CFG)["GE_AGENT_URL"] == pipeline["GE_AGENT_URL"]
     assert pipeline["GE_AGENT_URL"].endswith("/r/agent/15297440114283783461") and "/u/" not in pipeline["GE_AGENT_URL"]
 
 

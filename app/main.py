@@ -35,8 +35,8 @@ import base64
 import json
 import os
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from google.auth.exceptions import RefreshError
 from google.cloud import bigquery
 
@@ -78,6 +78,25 @@ def oauth_callback(code: str, state: str) -> HTMLResponse:
         return HTMLResponse(f"<p>Onboarding failed: {exc}</p>", status_code=400)
     event("inbox.connected", inbox=result["email"])
     return HTMLResponse(f"<p>Onboarded {result['email']}. You can close this tab.</p>")
+
+
+# --- short links, for solutioning-agent.hindustantimes.com ------------------
+
+
+def onboarding() -> RedirectResponse:
+    """Connect your inbox."""
+    return RedirectResponse("/oauth/gmail/start", status_code=302)
+
+
+def refinement(request: Request) -> Response:
+    """A new chat with the Solutioning Agent in Gemini Enterprise, where decks
+    are refined. Any query (?q=... to prefill the message, ?authuser=... for
+    the account) is passed on."""
+    base = os.environ.get("GE_AGENT_URL", "").rstrip("/")
+    if not base:
+        return HTMLResponse("<p>The Solutioning Agent's chat address isn't set.</p>", status_code=503)
+    query = f"?{request.url.query}" if request.url.query else ""
+    return RedirectResponse(f"{base}/session/-{query}", status_code=302)
 
 
 def _self_url() -> str:
@@ -226,6 +245,8 @@ def handle_message(email: str, message_id: str) -> dict:
 # --- route registration ------------------------------------------------------
 # Always present, on both deployments:
 app.add_api_route("/healthz", healthz, methods=["GET"])
+app.add_api_route("/onboarding", onboarding, methods=["GET"])
+app.add_api_route("/refinement", refinement, methods=["GET"])
 app.add_api_route("/oauth/gmail/start", oauth_start, methods=["GET"])
 app.add_api_route("/oauth/gmail/callback", oauth_callback, methods=["GET"])
 

@@ -27,7 +27,7 @@ You need:
 ## Step 1: Connect your inbox (one time, about a minute)
 
 1. Open this link in the browser where you use your HT email:
-   **https://solutioning-agent.hindustantimes.com/oauth/gmail/start**
+   **https://solutioning-agent.hindustantimes.com/onboarding**
 2. Choose your HT account.
 3. Google asks you to allow the Solutioning Agent to read your email and
    manage labels. Click **Allow**.
@@ -117,11 +117,12 @@ sending. Decks never mention prices.
 
 ## Using chat in Gemini Enterprise
 
-1. Open **https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a**
-   with your HT account.
-2. In the left sidebar, open **Agents** and choose **Solutioning Agent**.
-3. Check that **Solutioning Agent** is shown at the top of the conversation
-   before you type.
+1. Open **https://solutioning-agent.hindustantimes.com/refinement** with your HT
+   account. It opens a new chat with the Solutioning Agent in Gemini
+   Enterprise.
+2. Check that **Solutioning Agent** is shown at the top of the conversation
+   before you type. If it isn't, open **Agents** in the left sidebar and
+   choose **Solutioning Agent**.
 
 Gemini Enterprise's own assistant answers in a normal chat. It can find decks
 in Drive but can't change them, so if a reply says it can't edit the deck, you

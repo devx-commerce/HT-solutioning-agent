@@ -162,9 +162,13 @@ def pipeline_env(cfg: dict) -> dict[str, str]:
             f"projects/{i['project_number']}/locations/{i['region']}/reasoningEngines/{i['agent_engine_id']}",
         "EXCLUDED_SENDERS": ",".join(s["excluded_senders"]),
         "NEW_INBOX_LOOKBACK_HOURS": str(s["new_inbox_lookback_hours"]),
-        # Never one person's browser account (/u/1/): each reader opens it in their own default.
-        "GE_AGENT_URL": re.sub(r"/u/\d+/", "/", i["gemini_enterprise_agent_url"].split("/session/")[0]).rstrip("/"),
+        "GE_AGENT_URL": _ge_agent_url(i),
     }
+
+
+def _ge_agent_url(i: dict) -> str:
+    # Never one person's browser account (/u/1/): each reader opens it in their own default.
+    return re.sub(r"/u/\d+/", "/", i["gemini_enterprise_agent_url"].split("/session/")[0]).rstrip("/")
 
 
 def onboarding_env(cfg: dict) -> dict[str, str]:
@@ -173,6 +177,7 @@ def onboarding_env(cfg: dict) -> dict[str, str]:
         **_shared_service_env(cfg),
         "SERVICE_URL": _run_url(i, i["services"]["onboarding"]),
         "PUBLIC_ROUTES_ONLY": "true",
+        "GE_AGENT_URL": _ge_agent_url(i),  # where /refinement goes
     }
 
 

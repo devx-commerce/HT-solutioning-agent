@@ -67,3 +67,19 @@ def test_an_existing_grant_is_left_alone(get):
     client = _secret_client([_binding("roles/secretmanager.secretAccessor", "serviceAccount:runner@p.iam.gserviceaccount.com")])
     gmail_oauth._grant_pipeline_access(client, "projects/p/secrets/gmail-x")
     client.set_iam_policy.assert_not_called()
+
+
+# --- the short address's links ---------------------------------------------------------
+
+def test_the_short_addresss_two_links(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import main
+
+    monkeypatch.setenv("GE_AGENT_URL", "https://ge.example/r/agent/1")
+    client = TestClient(main.app)
+    chat = client.get("/refinement", follow_redirects=False)
+    assert chat.status_code == 302 and chat.headers["location"] == "https://ge.example/r/agent/1/session/-"
+    prefilled = client.get("/refinement?q=On%20brief%20Decathlon%202", follow_redirects=False)
+    assert prefilled.headers["location"] == "https://ge.example/r/agent/1/session/-?q=On%20brief%20Decathlon%202"
+    assert client.get("/onboarding", follow_redirects=False).headers["location"] == "/oauth/gmail/start"
