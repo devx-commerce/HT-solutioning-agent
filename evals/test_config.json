@@ -58,6 +58,20 @@
           "rubric_content": {
             "text_property": "The reply says which sources were checked, which returned nothing, and what could not be established, rather than implying everything was found."
           }
+        },
+        {
+          "rubric_id": "g-print-innovation",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "If the brief asks for print or lists print among its touchpoints, each print component in the deck names a specific print format (such as a French window, gatefold or jacket), says how the format itself carries the client's message, and describes what the reader sees from the front page to the inside spread; half-page, quarter-page or solus ads appear only where the brief asks for them. If the brief involves no print, this holds."
+          }
+        },
+        {
+          "rubric_id": "g-channel-balance",
+          "type": "FINAL_RESPONSE_QUALITY",
+          "rubric_content": {
+            "text_property": "The deck's weight across channels follows the brief: when the brief is mainly about on-ground activity, events or an integrated campaign, print is one component among the others and does not take more slides than the main on-ground or event component."
+          }
         }
       ]
     },

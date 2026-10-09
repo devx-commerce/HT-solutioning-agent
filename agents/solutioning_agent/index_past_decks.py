@@ -50,6 +50,8 @@ SCHEMA = [
     bigquery.SchemaField("text", "STRING"),
     bigquery.SchemaField("ips", "STRING", "REPEATED"),
     bigquery.SchemaField("channels", "STRING", "REPEATED"),
+    bigquery.SchemaField("print_formats", "STRING", "REPEATED",
+                         description="named print innovations, e.g. French window, gatefold"),
     bigquery.SchemaField("embedding", "FLOAT64", "REPEATED"),
     bigquery.SchemaField("indexed_at", "TIMESTAMP"),
 ]
@@ -143,7 +145,8 @@ _TAG_SCHEMA = {
             "title": {"type": "STRING"},
             "ips": {"type": "ARRAY", "items": {"type": "STRING"}},
             "channels": {"type": "ARRAY", "items": {"type": "STRING", "enum": list(solution_types.CHANNELS)}},
-        }, "required": ["first_slide", "last_slide", "title", "ips", "channels"]}},
+            "print_formats": {"type": "ARRAY", "items": {"type": "STRING"}},
+        }, "required": ["first_slide", "last_slide", "title", "ips", "channels", "print_formats"]}},
     },
     "required": ["summary", "parts"],
 }
@@ -161,6 +164,13 @@ planner can find and reuse its ideas. Read the whole deck, then:
   Campus, Anokhee Club, Hindustan Olympiad, Weekend Sorted, a Mint summit).
   Never the client's brands or another company's.
 - channels: the solution types the part uses, from the list below.
+- print_formats: the named print innovations the part proposes, in the
+  deck's own words, short and in title case: e.g. French Window, Gatefold,
+  Emboss Jacket, Text Bending, Extended News Tab, Pull-Out, Masthead
+  Takeover, XL Poster, Multiple Tabs, Scented Jacket. A slide that only
+  names a format over a mock-up counts. Standard ad units (half page,
+  quarter page, solus, strip) are not innovations; leave them out. Empty
+  when the part has no print innovation.
 
 """ + solution_types.describe_for_agent()
 
@@ -197,13 +207,15 @@ def rows_for(f: dict, slides: list[str], tags: dict, now: str) -> list[dict]:
             "modified_time": f["modifiedTime"], "indexed_at": now}
     rows = [{**base, "slide_no": 0, "context": f"{name}\nSummary", "text": tags.get("summary", ""),
              "ips": sorted({ip for p in tags.get("parts", []) for ip in p["ips"]}),
-             "channels": sorted({c for p in tags.get("parts", []) for c in p["channels"]})}]
+             "channels": sorted({c for p in tags.get("parts", []) for c in p["channels"]}),
+             "print_formats": sorted({x for p in tags.get("parts", []) for x in p.get("print_formats", [])})}]
     for n, text in enumerate(slides, 1):
         if not text.strip():
             continue
         part = part_of.get(n, {})
         rows.append({**base, "slide_no": n, "context": f"{name}\n{part.get('title', '')}".strip(),
-                     "text": text, "ips": part.get("ips", []), "channels": part.get("channels", [])})
+                     "text": text, "ips": part.get("ips", []), "channels": part.get("channels", []),
+                     "print_formats": part.get("print_formats", [])})
     vectors = past_decks.embed([f"{r['context']}\n{r['text']}"[:6000] for r in rows], "RETRIEVAL_DOCUMENT")
     for r, v in zip(rows, vectors):
         r["embedding"] = v
@@ -260,7 +272,9 @@ def main() -> None:
     client = bigquery.Client(project=PROJECT, default_query_job_config=billing.query_config())
     existing = _existing(client)
     now = datetime.now(timezone.utc).isoformat()
-    unchanged = [f for f in files if existing.get(f["id"]) and existing[f["id"]][0]["modified_time"] == f["modifiedTime"]]
+    # A deck indexed before a column was added is read again to fill it.
+    unchanged = [f for f in files if existing.get(f["id"]) and existing[f["id"]][0]["modified_time"] == f["modifiedTime"]
+                 and "print_formats" in existing[f["id"]][0]]
     changed = [f for f in files if f not in unchanged]
     rows = [r for f in unchanged for r in existing[f["id"]]]
     failed = 0

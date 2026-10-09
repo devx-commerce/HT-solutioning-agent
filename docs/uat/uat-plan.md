@@ -23,9 +23,12 @@ it meets the pilot's acceptance criteria and sign it off.
       htdigital.in, and a Gemini Enterprise licence if they'll use chat.
 - [ ] Resume the inbox check (the `solutioning-agent-sweep` scheduler job;
       see [../operations/troubleshooting.md](../operations/troubleshooting.md)).
-- [ ] Add a **Taken forward** column to the briefs sheet (the agent writes one
-      row per brief; this column is filled in by hand on the daily call).
-- [ ] Share the user guide with testers.
+- [ ] Share the user guide with testers. It links the **UAT feedback
+      form**, where testers send one response per deck: how useful it was,
+      whether it was taken forward, what worked, what to fix and how
+      serious. The form is owned by the agent account and only HT accounts
+      can fill it. Testers can't see anyone else's responses; the form's editors
+      see all of them, under Responses (link them to a sheet there).
 
 ## Day 1: onboarding session (about 45 minutes)
 
@@ -34,7 +37,9 @@ it meets the pilot's acceptance criteria and sign it off.
 3. A live example: forward a real brief to a tester's inbox, wait for the
    "Solution deck drafted" email, open the deck together.
 4. A chat example: find that deck in Gemini Enterprise and make two changes.
-5. How feedback is collected (below).
+5. How feedback is collected: the feedback form, one response per deck,
+   including decks that worked well (user guide, "Giving feedback during
+   UAT").
 
 ## Days 1 to 5: use it on real work
 
@@ -43,12 +48,14 @@ drafted automatically; they can also paste briefs into chat.
 
 **Daily 30-minute call**, with the solutioning team and the delivery team:
 
-- go through every deck drafted since the last call;
-- for each, record in the briefs sheet whether it was **taken forward**: used
-  as the basis of the real proposal, with material reuse or refinement (yes
-  or no, and a line on why);
-- note problems: wrong facts, missed briefs, unhelpful slides, anything
-  confusing. The delivery team triages them the same day.
+- go through every deck drafted since the last call, by its brief
+  reference, against the feedback form's responses;
+- for each, confirm whether it was **taken forward**: used as the basis of
+  the real proposal, with material reuse or refinement (Yes or Partly in the
+  form), and chase a response for any deck nobody has reviewed, so decks
+  that worked are counted as well as those that didn't;
+- go through the problems raised: wrong facts, missed briefs, unhelpful
+  slides, anything confusing. The delivery team triages them the same day.
 
 ## How acceptance is measured
 
@@ -58,7 +65,7 @@ from:
 | Criterion | Target | Measured from |
 |---|---|---|
 | Time to first draft | Draft delivered within 4 working hours of the brief arriving, for 70% of briefs | The weekly report (query 3) |
-| First-draft usefulness | At least 20% of drafts taken forward | The "taken forward" record kept on the daily call |
+| First-draft usefulness | At least 20% of drafts taken forward | The feedback form's "Taken forward?" answers (Yes or Partly), confirmed on the daily call |
 | Evidentiary grounding | 100% of drafts follow the HT template and cite at least one prior-campaign or competitor source | The weekly report (query 6); the template is enforced on every deck |
 | Retrieval transparency | 100% of drafts state which sources returned results and which didn't | The weekly report (query 6); every email carries a sources section |
 

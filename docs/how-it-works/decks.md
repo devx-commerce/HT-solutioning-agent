@@ -70,6 +70,14 @@ of record. It is kept in BigQuery, and every revision starts from it.
   works and Why it works); a series of articles or episodes gets numbered
   rows; a scale worth showing big gets big numbers beside their story; the
   whole plan by phase fits on one campaign matrix (channels against phases).
+- **Print is innovation, in proportion.** When print is among the brief's
+  touchpoints, the agent picks one to three named formats from HT's past
+  decks (or its own), says how each format carries the client's message,
+  and walks through what the reader sees from the front page to the
+  spread, with pages, paper and finish. Ad sizes (half page, quarter page,
+  solus) appear only when the brief asks for them, and the mock-up is a
+  design-team placeholder. On an on-ground, events or integrated brief,
+  print stays one component among the others.
 - **HT's own IPs are marked.** The first slide about an HT property or IP
   (HT PACE, Fresh on Campus, Anokhee Club, Weekend Sorted, an HT or Mint
   summit) carries an "HT MEDIA IP" badge in its top-right corner; the

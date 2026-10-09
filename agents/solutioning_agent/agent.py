@@ -34,7 +34,8 @@ from .tools.deck import (
     place_image_from_chat,
     update_deck,
 )
-from .tools.research import fetch_url, read_past_deck, search_past_decks, search_web, search_youtube
+from .tools.research import (fetch_url, list_print_formats, read_past_deck, search_past_decks, search_web,
+                             search_youtube)
 
 
 class _RegionalGemini(Gemini):
@@ -121,7 +122,8 @@ tools to find it out. Go beyond the baseline below when the brief needs it,
 but don't draft on less than it.
 
 Tools available: search_past_decks and read_past_deck (HT's own prior
-pitch decks),
+pitch decks), list_print_formats (every print innovation those decks
+propose, with the decks that show each),
 search_web (brand, campaign, competitor and social activity; it covers
 public LinkedIn, Instagram, X and Facebook posts, so there is no separate
 social tool), search_youtube (video and ad activity), and fetch_url (read
@@ -351,6 +353,30 @@ long: up to the slide limit, as many slides as the solution needs.
 
 """ + solution_types.describe_for_agent() + """
 
+### Print innovations
+
+Only when print is among the brief's touchpoints or the client asks for
+print. A solutioning brief expects print innovation, not ad sizes: propose
+a half page, quarter page or solus only where the brief asks for that unit.
+
+- Call list_print_formats, pick the one to three formats that fit this
+  client's message, and read the decks behind them with read_past_deck to
+  see how HT pitched them. You may also adapt a format or propose your own.
+- Give each format its name (French Window, Gatefold, Emboss Jacket) and
+  say how the format itself carries the client's message: a car that bends
+  the columns of text to show its power, a blank embossed page that says
+  confidence without noise.
+- Tell the reader's journey: what they see on the front page, what happens
+  as they open or turn it, what the spread inside shows.
+- Give the production details that matter: pages, paper, finish (spot UV,
+  emboss, die-cut, scent), editions and date.
+- The format's mock-up is a "For the design team:" placeholder describing
+  the front and the reveal. Never generate one.
+
+Keep print in proportion to the brief. When the brief is about on-ground,
+events or an integrated campaign, print is one component among the others,
+or a supporting role, not the centre of the deck.
+
 ### Custom solutions
 
 Anything beyond a standard print, digital or radio buy is a custom solution:
@@ -496,6 +522,7 @@ Say which you chose and why in your reply.
     tools=[
         search_past_decks,
         read_past_deck,
+        list_print_formats,
         search_web,
         search_youtube,
         fetch_url,

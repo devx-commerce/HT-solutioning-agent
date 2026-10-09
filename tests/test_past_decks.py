@@ -86,6 +86,31 @@ def test_a_table_failure_is_reported_not_raised(monkeypatch):
     assert "could not be searched" in result["error"]
 
 
+def test_print_formats_group_spellings_and_list_their_decks():
+    rows = [
+        {**_row("nissan", 0, "Summary", [1, 0, 0]), "print_formats": ["French Window", "Gatefold"]},
+        {**_row("nissan", 5, "FRENCH WINDOW", [1, 0, 0]), "print_formats": ["French Window"]},
+        {**_row("nissan", 6, "6 PAGE GATE FOLD", [1, 0, 0]), "print_formats": ["Gatefold"]},
+        {**_row("bkt", 11, "Perforated French window", [1, 0, 0]), "print_formats": ["French window"]},
+        _row("pace", 1, "HT PACE schools", [1, 0, 0]),  # indexed before the column existed
+    ]
+    with patch.object(past_decks, "_load", return_value=(rows, past_decks._Index(rows))):
+        found = past_decks.print_formats()
+        hidden = past_decks.print_formats(frozenset({"bkt"}))
+    assert [f["format"] for f in found] == ["French Window", "Gatefold"]  # most decks first
+    assert [(d["deck_id"], d["slides"]) for d in found[0]["decks"]] == [("nissan", [5]), ("bkt", [11])]
+    assert [d["deck_id"] for d in hidden[0]["decks"]] == ["nissan"]
+
+
+def test_list_print_formats_needs_the_table(monkeypatch):
+    monkeypatch.setattr(research, "PAST_DECKS_SOURCE", "vertex")
+    assert research.list_print_formats("b1")["formats"] == []
+    monkeypatch.setattr(research, "PAST_DECKS_SOURCE", "bigquery")
+    with patch.object(past_decks, "print_formats", return_value=[{"format": "Gatefold", "decks": []}]), \
+         patch.object(research, "_log_retrieval"):
+        assert research.list_print_formats("b1")["formats"][0]["format"] == "Gatefold"
+
+
 def test_read_past_deck_keeps_an_eval_cases_own_deck_hidden():
     ctx = type("Ctx", (), {"state": {research.EVAL_HIDDEN_DECKS_KEY: ["pace"]}})()
     with patch.object(past_decks, "read") as read:
@@ -139,3 +164,13 @@ def test_rows_carry_each_slides_part_even_where_the_slide_never_names_it():
     assert [r["slide_no"] for r in rows] == [0, 1, 2, 3]  # the empty slide 4 is skipped
     assert rows[3]["ips"] == ["HT PACE"] and rows[3]["context"] == "Rocksport X HT\nHT PACE Principals' Meet"
     assert rows[0]["text"].startswith("Rocksport") and rows[0]["ips"] == ["HT PACE"]
+
+
+def test_rows_carry_the_print_formats_of_their_part():
+    f = {"id": "d1", "name": "Nissan.pptx", "webViewLink": "https://drive/d1", "modifiedTime": "t"}
+    tags = {"summary": "Nissan launch.", "parts": [
+        {"first_slide": 1, "last_slide": 2, "title": "Launch print innovations", "ips": [], "channels": ["Print"],
+         "print_formats": ["French Window"]}]}
+    with patch.object(past_decks, "embed", side_effect=lambda texts, task: [[0.0]] * len(texts)):
+        rows = indexer.rows_for(f, ["FRENCH WINDOW", "Spread"], tags, "now")
+    assert rows[0]["print_formats"] == ["French Window"] and rows[2]["print_formats"] == ["French Window"]

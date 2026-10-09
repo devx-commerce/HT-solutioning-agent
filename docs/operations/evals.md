@@ -45,7 +45,7 @@ heading.
 
 | Score | Checked by | Passes when |
 |---|---|---|
-| Response quality | Judge model | At least 75% of the case's rubrics and the general ones hold, judged on the email and the full deck |
+| Response quality | Judge model | At least 75% of the case's rubrics and the general ones hold, judged on the email and the full deck. The general ones include print innovation (named formats, the reader's journey, ad sizes only when asked) and channel balance (print doesn't take over an on-ground or integrated brief) |
 | Research quality | Judge model | At least 75% of the research rubrics hold (past decks searched from several angles, competitors checked, no guessed websites, rejected drafts fixed) |
 | Deck built properly | Code | A deck was published with HT's logo and one picture for every three content slides |
 | No competitor sources | Code | No competitor newspaper is cited anywhere |

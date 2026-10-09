@@ -370,6 +370,34 @@ def read_past_deck(deck_id: str, brief_id: str, tool_context: ToolContext = None
     return deck or {"error": "No past deck with that id. Use a deck_id from search_past_decks."}
 
 
+def list_print_formats(brief_id: str, tool_context: ToolContext = None) -> dict:
+    """List every print innovation HT's past decks propose (French window,
+    gatefold, emboss jacket and so on), most used first, each with the decks
+    and slides that show it.
+
+    Use it when print is among the brief's touchpoints or the client asks
+    for print, then read the decks behind the formats you consider with
+    read_past_deck to see how HT pitched them.
+
+    Args:
+        brief_id: the brief this research belongs to; pass "" for ad-hoc
+            research not tied to a brief.
+    """
+    started = time.time()
+    if PAST_DECKS_SOURCE != "bigquery":
+        return {"formats": [], "error": "The print formats list needs the past-deck table "
+                                        "(settings.past_decks_source: bigquery)."}
+    try:
+        formats = past_decks.print_formats(_hidden_deck_ids(tool_context))
+    except Exception as exc:  # noqa: BLE001 - surfaced to the agent, not raised
+        _log_retrieval(brief_id, "past_decks", "error", started, query="print formats", error=str(exc)[:300])
+        return {"formats": [], "error": "HT's print formats could not be listed just now."}
+    # Logged as a past-decks search: it is one, by format rather than by words.
+    _log_retrieval(brief_id, "past_decks", "success" if formats else "no_results", started,
+                   query="print formats", result_count=len(formats))
+    return {"formats": formats}
+
+
 def search_past_decks(query: str, brief_id: str, tool_context: ToolContext = None) -> dict:
     """Search HT's own past pitch decks for relevant prior work.
 

@@ -29,11 +29,16 @@ BigQuery table `past_deck_slides`, one row per slide:
 - **HT's own IPs** in that part (HT PACE, Fresh on Campus, Anokhee Club, ...)
   and its **solution types** (print, digital, video and social, audio,
   events and on-ground, content IP, research, social impact).
+- Its **print innovations**, by the deck's own name for them (French Window,
+  Gatefold, Emboss Jacket, Text Bending, ...). Ad sizes such as a half page
+  are not counted.
 - A **summary** of the whole deck.
 
 A search finds slides both by meaning and by exact words (an IP's name, a
 city), groups them by deck and returns the best decks first, each marked a
 strong or a weak match. `read_past_deck` then gives the agent one deck whole.
+`list_print_formats` lists every print innovation in the index with the
+decks that show it; the agent uses it only when print is part of the brief.
 
 The index refreshes daily at `settings.past_decks_refresh_schedule` (only
 new and changed files are read again; a removed file drops out). After

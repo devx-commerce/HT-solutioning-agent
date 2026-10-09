@@ -128,8 +128,9 @@ in Drive but can't change them, so if a reply says it can't edit the deck, you
 are talking to the assistant rather than the Solutioning Agent: go back to
 step 2.
 
-Name the deck in your first message of a conversation ("On the Decathlon
-deck, ..."), so the agent knows which one you mean.
+Name the deck in your first message of a conversation, ideally by its brief
+reference from the email ("On brief Decathlon 2, ..."), so the agent knows
+which one you mean.
 
 **If the page says you're not authorised:** your browser opened it with a
 different Google account. Open the link in a browser profile signed in only
@@ -183,5 +184,26 @@ Knowing these saves time:
   tell the UAT coordinator.
 - **"Please reconnect your inbox" email:** the agent lost access to your
   inbox. Click the link in that email (it's the same as Step 1).
-- **The deck has a mistake:** fix it in chat or in your copy, and note it in
-  the daily UAT check-in so the team can improve the agent.
+- **The deck has a mistake:** fix it in chat or in your copy, and add it to
+  the feedback form (below) so the team can improve the agent.
+
+## Giving feedback during UAT
+
+Use the **UAT feedback form**: **https://docs.google.com/forms/d/e/1FAIpQLSfhdmmtWt4Rg4HrxLMGGbeUPcgsEQH48rWs3MeFAznD9-Lu6w/viewform**
+
+Send one response for each deck you look at, including the ones that worked
+well, and one for anything else worth telling us (a missed brief, a chat
+request that didn't work). It takes about a minute, and every question is
+optional:
+
+| Question | What to put |
+|---|---|
+| Brief reference | From the "Solution deck drafted" email, such as "Decathlon 2". Empty if it isn't about one deck |
+| How useful was this draft? | 1 (not useful) to 5 (ready to build on) |
+| Taken forward? | **Yes**: it became the basis of the real proposal. **Partly**: you reused some slides or ideas. **No**, or **Not decided yet** |
+| What worked | A line or two |
+| What to fix | Wrong facts, weak ideas, missing slides, anything confusing |
+| How serious | **Blocker**: you couldn't use it. **Major**: it needed a lot of rework. **Minor**: small fixes |
+
+Your email address is recorded with your response, so there's no need to add
+your name. The team goes through the responses on the daily UAT call.
