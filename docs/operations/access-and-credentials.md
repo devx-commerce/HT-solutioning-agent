@@ -35,7 +35,11 @@ every build fails, and the logs show `invalid_grant`.
 ## People's inboxes
 
 Each person connects their own inbox through the onboarding page
-(`https://solutioning-agent-onboarding-296974829876.us-central1.run.app/oauth/gmail/start`).
+(`https://solutioning-agent.hindustantimes.com/oauth/gmail/start`, the short
+address of `https://solutioning-agent-onboarding-296974829876.us-central1.run.app`).
+After they allow access, Google returns them to the run.app address, because
+that is the redirect URI registered on the OAuth client; the short address
+needs no entry there.
 Their access is stored in a secret named `gmail-<16 characters>`, and they
 appear in the BigQuery table `solutioning_agent.users`.
 

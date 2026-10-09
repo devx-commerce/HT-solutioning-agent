@@ -152,6 +152,8 @@ def pipeline_env(cfg: dict) -> dict[str, str]:
     return {
         **_shared_service_env(cfg),
         "SERVICE_URL": _run_url(i, i["services"]["pipeline"]),
+        # The pipeline is private: links people click go to the public onboarding service.
+        "ONBOARDING_URL": (i.get("public_address") or _run_url(i, i["services"]["onboarding"])).rstrip("/"),
         "BRIEFS_SHEET_ID": s["briefs_sheet_id"],
         "CLASSIFY_MODEL": s["models"]["classify"],
         "BUILD_WORK_TOPIC": i["pubsub_topic"],

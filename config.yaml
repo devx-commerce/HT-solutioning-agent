@@ -111,6 +111,10 @@ infrastructure:
   # in each "deck drafted" email opens it with the deck already named.
   gemini_enterprise_agent_url: https://vertexaisearch.cloud.google.com/us/home/cid/b9cac80f-5f8a-4ebf-926c-980e78d0782a/r/agent/15297440114283783461
   past_decks_location: us
+  # The short public address of the onboarding service (a Cloud Run domain
+  # mapping; DNS kept by HT IT). Used in links people see, such as the
+  # "reconnect your inbox" email. Empty: the service's run.app address.
+  public_address: https://solutioning-agent.hindustantimes.com
   services:
     pipeline: solutioning-agent
     onboarding: solutioning-agent-onboarding

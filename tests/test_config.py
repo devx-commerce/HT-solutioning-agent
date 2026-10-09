@@ -53,6 +53,8 @@ def test_services_get_the_settings_the_code_reads():
     assert agent["RENDER_URL"] == "https://solutioning-agent-renderer-296974829876.us-central1.run.app"
     assert "STATE_SIGNING_KEY" not in pipeline  # a secret, mounted by the deploy, never a plain value
     assert rc.onboarding_env(CFG)["PUBLIC_ROUTES_ONLY"] == "true"
+    # People click the public address, never the private pipeline's.
+    assert pipeline["ONBOARDING_URL"] == "https://solutioning-agent.hindustantimes.com"
     assert pipeline["GE_AGENT_URL"].endswith("/r/agent/15297440114283783461") and "/u/" not in pipeline["GE_AGENT_URL"]
 
 

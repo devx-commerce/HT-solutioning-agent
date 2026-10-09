@@ -27,7 +27,7 @@ You need:
 ## Step 1: Connect your inbox (one time, about a minute)
 
 1. Open this link in the browser where you use your HT email:
-   **https://solutioning-agent-onboarding-296974829876.us-central1.run.app/oauth/gmail/start**
+   **https://solutioning-agent.hindustantimes.com/oauth/gmail/start**
 2. Choose your HT account.
 3. Google asks you to allow the Solutioning Agent to read your email and
    manage labels. Click **Allow**.

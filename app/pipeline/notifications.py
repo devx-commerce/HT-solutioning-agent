@@ -27,7 +27,9 @@ SERVICE_NAME = "Solutioning Agent"
 
 
 def send_reauth_prompt(email_address: str) -> None:
-    onboarding_url = f"{os.environ.get('SERVICE_URL', '')}/oauth/gmail/start"
+    # Not SERVICE_URL: that is this private pipeline's own address, which a
+    # browser can't open. The onboarding service is the public one.
+    onboarding_url = f"{os.environ.get('ONBOARDING_URL', '')}/oauth/gmail/start"
 
     body = (
         f"{SERVICE_NAME} can no longer read your inbox, so your access needs to "
